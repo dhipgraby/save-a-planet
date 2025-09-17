@@ -1,0 +1,59 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "script": "dev-auth",
+            "problemMatcher": [],
+            "label": "AUTH",
+            "detail": "nest start auth --watch",
+            "options": {
+                "cwd": "backend"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "dev-users",
+            "problemMatcher": [],
+            "label": "USERS",
+            "detail": "nest start users --watch",
+            "options": {
+                "cwd": "backend"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "prisma",
+            "problemMatcher": [],
+            "label": "DB",
+            "detail": "npx prisma studio",
+            "options": {
+                "cwd": "backend"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "dev",
+            "problemMatcher": [],
+            "label": "FRONT",
+            "detail": "next dev -p 3030",
+            "options": {
+                "cwd": "frontend"
+            }
+        },
+        {
+            "label": "Start All Services",
+            "dependsOn": [
+                "AUTH",
+                "USERS",
+                "DB",
+                "FRONT"
+            ],
+            "dependsOrder": "parallel",
+            "problemMatcher": [],
+            "options": {
+                "cwd": "backend"
+            }
+        }
+    ]
+}

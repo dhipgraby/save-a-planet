@@ -1,0 +1,8 @@
+{
+    "login": "/auth/login",
+    "signup": "/auth/signup",
+    "dashboard": {
+        "linkText": "Dashboard",
+        "linkHref": "/dashboard"
+    }
+}
