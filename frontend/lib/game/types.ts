@@ -15,6 +15,9 @@ export interface GameState {
   populationHealth: number;
   resources: number;
   installed: InstalledSystem[];
-  installing: { key: GoodSystemKey; remainingTicks: number } | null;
+  // New mechanics
+  lastConsumptionTick: number; // last 10s boundary processed
+  lastHealTick: number; // last 5s boundary processed for population heal
+  healCooldownUntilTick: number; // tick number until which heal is on cooldown
   gameOver: boolean;
 }

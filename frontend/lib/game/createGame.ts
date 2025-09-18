@@ -17,7 +17,15 @@ export function createPhaserGame(parent: HTMLElement) {
     scene: [MainScene],
     scale: {
       mode: Phaser.Scale.RESIZE,
-      autoCenter: Phaser.Scale.CENTER_BOTH
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      zoom: 1
+    },
+    render: {
+      antialias: true,
+      roundPixels: true,
+      pixelArt: false,
+      powerPreference: "high-performance",
+      mipmapFilter: "LINEAR_MIPMAP_LINEAR"
     },
     dom: { createContainer: true }
   };
