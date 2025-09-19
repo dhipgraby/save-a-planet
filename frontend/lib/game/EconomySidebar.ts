@@ -9,6 +9,25 @@ export class EconomySidebar {
   private prevImpactTotal = 0;
   private headerHeightFn: () => number;
   private topY: number | null = null;
+  // throttle floating earnings animation
+  private lastIncomeFloatAt = 0;
+
+  // Create a gold floating DOM label above the income chip; tweens up and fades out, then destroys itself
+  private showIncomeFloat(x: number, y: number, text: string) {
+    const html = `<div style="position:absolute; transform:translate(0%, -50%); color:#fbbf24; font-family:monospace; font-size:12px; font-weight:700; text-shadow:0 1px 0 rgba(0,0,0,.6); pointer-events:none; z-index:999999;">${text}</div>`;
+    const el = this.scene.add.dom(x, y).createFromHTML(html).setOrigin(0, 0).setDepth(9999).setScrollFactor(0);
+    // Make sure wrapper is on top in the DOM stacking context as well
+    try { (el.node as HTMLElement).style.zIndex = "999999"; } catch { /* no-op */ }
+    // Tween DOM element: rise a bit and fade
+    this.scene.tweens.add({
+      targets: el,
+      y: y - 22,
+      alpha: 0,
+      duration: 1500,
+      ease: "Sine.easeOut",
+      onComplete: () => { try { el.destroy(); } catch { /* no-op */ } }
+    });
+  }
 
   constructor(scene: Phaser.Scene, headerHeightFn: () => number) {
     this.scene = scene;
@@ -53,11 +72,12 @@ export class EconomySidebar {
         ? `Damage ${impPerSec.toFixed(1)}/s`
         : `Heal ${Math.abs(impPerSec).toFixed(1)}/s`;
       return `<div style="display:flex;justify-content:space-between;gap:8px;margin:6px 0;">
-        <span style="opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.key}</span>
-                <span style="display:flex;gap:8px;">
-                  <span style="color:#fbbf24;">🪙 +${incPerSec.toFixed(1)}/s</span>
-                  <span style="color:${color};">🔥 ${impLabel}</span>
-                </span>
+        <span style="opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        ${String(s.key).charAt(0).toUpperCase() + String(s.key).slice(1)}</span>
+            <span style="display:flex;gap:8px;">
+          <span style="color:#fbbf24;">🪙 +${incPerSec.toFixed(1)}/s</span>
+          <span style="color:${color};">🔥 ${impLabel}</span>
+            </span>
       </div>`;
     });
     const incomePerTick = installed.reduce((a, s) => a + s.resourceIncome, 0);
@@ -91,6 +111,27 @@ export class EconomySidebar {
     if (impChip && impact !== this.prevImpactTotal) this.pulseDom(impChip);
     this.prevIncomeTotal = income;
     this.prevImpactTotal = impact;
+
+    // Spawn a floating DOM label over the income chip roughly once per second (to render above the DOM panel)
+    if (income > 0 && incChip) {
+      const now = this.scene.time.now;
+      if (now - this.lastIncomeFloatAt >= Math.max(800, gameConfig.tickDurationMs * 0.8)) {
+        const dom = this.sidebarDom;
+        if (dom && !(dom as any).destroyed) {
+          const root = dom.node as HTMLElement | null;
+          if (root) {
+            const chipRect = incChip.getBoundingClientRect();
+            const rootRect = root.getBoundingClientRect();
+            const relX = (chipRect.left - rootRect.left) + chipRect.width / 2;
+            const relYTop = (chipRect.top - rootRect.top); // top edge of chip
+            const x = dom.x + Math.floor(relX);
+            const y = dom.y + Math.floor(relYTop) - 6; // slightly above the chip
+            this.showIncomeFloat(x, y, `+${income.toFixed(1)}`);
+            this.lastIncomeFloatAt = now;
+          }
+        }
+      }
+    }
   }
 
   public reposition(width: number, height: number, topY?: number) {

@@ -84,17 +84,14 @@ export default class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.svg("planet", "/game/planet.svg", { width: 256, height: 256 });
-    this.load.svg("planet_happy", "/game/planet_happy.svg", { width: 256, height: 256 });
-    this.load.svg("planet_mid", "/game/planet_mid.svg", { width: 256, height: 256 });
-    this.load.svg("planet_sick", "/game/planet_sick.svg", { width: 256, height: 256 });
-    this.load.svg("oil", "/game/oil.svg", { width: 64, height: 64 });
-    this.load.svg("coal", "/game/coal.svg", { width: 64, height: 64 });
-    this.load.svg("logging", "/game/logging.svg", { width: 64, height: 64 });
-    this.load.svg("solar", "/game/solar.svg", { width: 64, height: 64 });
-    this.load.svg("wind", "/game/wind.svg", { width: 64, height: 64 });
-    this.load.svg("reforest", "/game/reforest.svg", { width: 64, height: 64 });
-    this.load.svg("sustainableFarm", "/game/farm.svg", { width: 64, height: 64 });
+    this.load.svg("planet", "/game/planet.svg", { width: 256, height: 256 });    
+    this.load.image("oil", "/game/oil.png");
+    this.load.image("coal", "/game/coal.png");
+    this.load.image("logging", "/game/logging.png");
+    this.load.image("solar", "/game/solar.png");
+    this.load.image("wind", "/game/wind.png");
+    this.load.image("reforest", "/game/reforest.png");
+    this.load.image("sustainableFarm", "/game/farm.png");
     this.load.svg("coin", "/game/coin.svg", { width: 20, height: 20 });
     // Layered planet assets
     this.load.image("planet_base_hd", "/game/sprites/base-planet.png"); // 1280x1280
@@ -119,26 +116,11 @@ export default class MainScene extends Phaser.Scene {
     this.initState();
     // Start background music immediately (during intro) so it plays throughout.
     this.ensureMusic();
+    // We are about to show the intro; mark as active so HUD initializes in minimal mode (music button only)
+    this.introActive = true;
     // Ensure HUD exists early so we can show the music toggle during intro
-    // this.ensureHud();
-    // Create music toggle immediately (will be recreated/repositioned safely later in startGame)
-    if (this.hud && (this.hud as any).createMusicButton) {
-      (this.hud as any).createMusicButton((on: boolean) => {
-        if (this.bgm) {
-          const anySound: any = this.bgm as any;
-          if (typeof anySound.setMute === "function") {
-            anySound.setMute(!on);
-          } else {
-            if (!on) {
-              anySound.__prevVol = anySound.volume ?? 0.4;
-              anySound.setVolume(0);
-            } else {
-              anySound.setVolume(anySound.__prevVol ?? 0.4);
-            }
-          }
-        }
-      });
-    }
+    this.ensureHud();
+    // Music button is created within ensureHud and kept in sync.
     // Launch educational intro first
     this.startIntroSequence();
     // Handle resize events to keep elements anchored (safe pre-world)
@@ -155,9 +137,7 @@ export default class MainScene extends Phaser.Scene {
       }
       this.populationVisuals = undefined;
       if (this.bgm) {
-        try {
-          this.bgm.stop();
-        } catch { /* ignore */ }
+        try { this.bgm.stop(); } catch { /* ignore */ }
         this.bgm.destroy();
         this.bgm = undefined;
       }
@@ -203,6 +183,41 @@ export default class MainScene extends Phaser.Scene {
     if (!this.introActive) {
       this.hud.createHudText();
       this.hud.createHudBars();
+    }
+    // Always create the music button (both intro and gameplay)
+    if ((this.hud as any).createMusicButton) {
+      (this.hud as any).createMusicButton((on: boolean) => {
+        if (this.bgm) {
+          const anySound: any = this.bgm as any;
+          if (typeof anySound.setMute === "function") {
+            anySound.setMute(!on);
+          } else {
+            if (!on) {
+              anySound.__prevVol = anySound.volume ?? 0.4;
+              anySound.setVolume(0);
+            } else {
+              anySound.setVolume(anySound.__prevVol ?? 0.4);
+            }
+          }
+        }
+        // Persist to localStorage (1 = muted, 0 = unmuted)
+        try { window?.localStorage?.setItem("sap_audio_muted", on ? "0" : "1"); } catch { /* ignore */ }
+      });
+      // Reflect initial label: prefer persisted value; else derive from bgm
+      let desiredOn: boolean | null = null;
+      try {
+        const saved = window?.localStorage?.getItem("sap_audio_muted");
+        if (saved === "1" || saved === "true") desiredOn = false;
+        else if (saved === "0" || saved === "false") desiredOn = true;
+      } catch { /* ignore */ }
+      if (desiredOn === null) {
+        const bgmAny: any = this.bgm as any;
+        const isMuted = bgmAny ? (typeof bgmAny.mute === 'boolean' ? bgmAny.mute : (bgmAny.volume === 0)) : true;
+        desiredOn = !isMuted;
+      }
+      if ((this.hud as any).setMusicOn && desiredOn !== null) {
+        (this.hud as any).setMusicOn(desiredOn);
+      }
     }
   }
 
@@ -264,7 +279,18 @@ export default class MainScene extends Phaser.Scene {
     if (this.introDom) {
       this.introDom.destroy(); this.introDom = null;
     }
+    // We are leaving the intro; switch HUD from minimal to full without losing the music button
     this.introActive = false;
+
+    if (this.hud) {
+      // If HUD was minimal, expand in-place (preserves music button and avoids duplicates)
+      if ((this.hud as any).minimal === true && (this.hud as any).expandToFull) {
+        (this.hud as any).expandToFull();
+      }
+    } else {
+      // If somehow no HUD, ensure fresh one
+      this.ensureHud();
+    }
 
     // Build the world and UI now
     this.initWorld();
@@ -272,26 +298,7 @@ export default class MainScene extends Phaser.Scene {
     this.bottomToolbarDom = null;
     this.startTickLoop();
 
-    // Create music toggle button in HUD (after HUD exists)
-    if (this.hud && (this.hud as any).createMusicButton) {
-      (this.hud as any).createMusicButton((on: boolean) => {
-        if (this.bgm) {
-          // Mute/unmute without stopping to preserve playback position.
-          // Some Phaser typings may not expose setMute; fallback to volume manipulation.
-          const anySound: any = this.bgm as any;
-          if (typeof anySound.setMute === "function") {
-            anySound.setMute(!on);
-          } else {
-            if (!on) {
-              anySound.__prevVol = anySound.volume ?? 0.4;
-              anySound.setVolume(0);
-            } else {
-              anySound.setVolume(anySound.__prevVol ?? 0.4);
-            }
-          }
-        }
-      });
-    }
+    // Music button is created by ensureHud + header redraw; no need to recreate here
 
     // Make sure all UI elements are visible and properly positioned
     const width = this.cameras.main.width;
@@ -335,31 +342,7 @@ export default class MainScene extends Phaser.Scene {
     this.introActive = true;
     this.introSequence = new IntroSequence(this, {
       onComplete: () => {
-        // Switch to full HUD now that gameplay will begin
-        if (this.hud) {
-          // Recreate full HUD elements if we were minimal
-          if ((this.hud as any).minimal) {
-            this.hud = new HudOverlay(this, false);
-            this.hud.createHudText();
-            this.hud.createHudBars();
-            // Recreate music button (keeping prior mute state if any)
-            if ((this as any).bgm) {
-              const bgmAny: any = (this as any).bgm;
-              const wasMuted = typeof bgmAny.mute === "boolean" ? bgmAny.mute : (bgmAny.volume === 0);
-              (this.hud as any).createMusicButton((on: boolean) => {
-                const anySound: any = this.bgm as any;
-                if (anySound) {
-                  if (typeof anySound.setMute === "function") anySound.setMute(!on);
-                  else anySound.setVolume(on ? (anySound.__prevVol ?? 0.4) : 0);
-                }
-              });
-              // Reflect previous state
-              if (wasMuted) {
-                const btnText = (this.hud as any).musicBtnText; if (btnText) btnText.setText("Music: Off");
-              }
-            }
-          }
-        }
+        // Keep minimal HUD during intro; full HUD will be created fresh in startGame
         this.showStartOverlay();
       },
       onSkipToEnd: () => { /* optional hook for analytics */ }
@@ -391,12 +374,13 @@ export default class MainScene extends Phaser.Scene {
       this.state.lastConsumptionTick = this.state.tick;
     }
 
-    // 4) Every 5s: population decay/heal based on income sufficiency
+    // 4) Every Xs: population decay/heal based on income sufficiency (resource bank based)
     if (this.state.tick - this.state.lastHealTick >= gameConfig.populationCheckIntervalSec) {
       // Required income per second based on minimum per population point: (pop * minPer10s) / 10
       const requiredPerSec = (this.state.populationHealth * gameConfig.minIncomePerPopPer10s) / 10;
+      // Keep original bank-based logic: compare resources vs thresholds
       if (this.state.resources >= requiredPerSec * gameConfig.populationHealThresholdMultiplier) {
-        // Heal if we have 40% more than required
+        // Heal if we have multiplier more than required
         this.state.populationHealth += gameConfig.populationHealPerCheck;
         // Show growth text above population crowd instead of header
         if (this.populationVisuals) {
@@ -476,6 +460,20 @@ export default class MainScene extends Phaser.Scene {
         requiredPerSec,
         secondsUntilUpkeep,
         populationHealth: this.state.populationHealth
+      });
+    }
+
+    // Update mini crowd info panel (above population characters)
+    if (this.hud && (this.hud as any).updateCrowdInfo) {
+      const peopleCount = Math.max(0, Math.floor(this.state.populationHealth));
+      (this.hud as any).updateCrowdInfo({
+        peopleCount,
+        requiredPerSec,
+        requiredPer10s: this.state.populationHealth * gameConfig.minIncomePerPopPer10s,
+        incomePerSec,
+        resources: this.state.resources,
+        popCostPer10s,
+        secondsUntilUpkeep
       });
     }
 
@@ -593,12 +591,24 @@ export default class MainScene extends Phaser.Scene {
     if (!this.bgm) {
       if (!this.sound.get("bgm_main")) {
         // If asset somehow not loaded, attempt dynamic load (Phaser supports late load)
-        try {
-          this.load.audio("bgm_main", ["/music/Underneath%20Skies.mp3"]); this.load.start();
-        } catch { /* ignore */ }
+        try { this.load.audio("bgm_main", ["/music/Underneath%20Skies.mp3"]); this.load.start(); } catch { /* ignore */ }
       }
-      this.bgm = this.sound.add("bgm_main", { loop: true, volume: 0.4 });
+      // Determine initial mute state from localStorage (default Off)
+      let startMuted = true;
+      try {
+        const saved = window?.localStorage?.getItem("sap_audio_muted");
+        if (saved === "0" || saved === "false") startMuted = false;
+      } catch { /* SSR or blocked storage */ }
+      // Create sound with persisted mute state
+      this.bgm = this.sound.add("bgm_main", { loop: true, volume: 0.4, mute: startMuted as any });
       this.bgm.play();
+      const anySound: any = this.bgm as any;
+      if (typeof anySound.setMute === 'function') {
+        anySound.setMute(startMuted);
+      } else {
+        anySound.__prevVol = anySound.volume ?? 0.4;
+        anySound.setVolume(startMuted ? 0 : (anySound.__prevVol ?? 0.4));
+      }
     }
   }
 
@@ -622,7 +632,8 @@ export default class MainScene extends Phaser.Scene {
   // Education data moved to ui/education/education.ts; provide local icon helper for legacy HTML snippets
   private iconSrc(key: string) {
     const map: Record<string, string> = { sustainableFarm: "farm" };
-    return `/game/${map[key] ?? key}.svg`;
+    // Prefer PNG variants for crisper raster visuals in UI panels
+    return `/game/${map[key] ?? key}.png`;
   }
 
   private ensureSidebar() {
@@ -735,13 +746,13 @@ export default class MainScene extends Phaser.Scene {
       const panelMaxHeight = Math.max(170, Math.floor(height * 0.45));
       const x = (width - panelWidth) / 2;
       // Update the DOM root styles to reflect new bounds
-      const root = this.bottomPanelDom.node as HTMLElement;
+      const root = this.bottomPanelDom.node as (HTMLElement | null);
       if (root) {
         root.style.width = `${panelWidth}px`;
         root.style.maxHeight = `${panelMaxHeight}px`;
       }
       if (this.bottomPanelCentered) {
-        const actualH = Math.min(panelMaxHeight, (this.bottomPanelDom.node as HTMLElement).getBoundingClientRect().height || panelMaxHeight);
+        const actualH = Math.min(panelMaxHeight, root ? (root.getBoundingClientRect().height || panelMaxHeight) : panelMaxHeight);
         const y = Math.max(8, Math.floor((height - actualH) / 2));
         this.bottomPanelDom.setPosition(x, y);
       } else {
@@ -760,6 +771,23 @@ export default class MainScene extends Phaser.Scene {
 
     // Redraw bars to ensure correct widths after resize (only if HUD exists)
     if (this.hud) this.updateHud();
+    // Keep crowd info positioned on resize
+    if (this.hud && (this.hud as any).updateCrowdInfo) {
+      const tickSec = gameConfig.tickDurationMs / 1000;
+      const incomePerSec = this.state.installed.reduce((sum, s) => sum + s.resourceIncome, 0);
+      const requiredPerSec = (this.state.populationHealth * gameConfig.minIncomePerPopPer10s) / 10;
+      const secondsUntilUpkeep = Math.max(0, this.state.lastConsumptionTick + 10 - this.state.tick);
+      const popCostPer10s = this.state.populationHealth * gameConfig.populationConsumptionPer10sPerCapita;
+      (this.hud as any).updateCrowdInfo({
+        peopleCount: Math.max(0, Math.floor(this.state.populationHealth)),
+        requiredPerSec,
+        requiredPer10s: this.state.populationHealth * gameConfig.minIncomePerPopPer10s,
+        incomePerSec,
+        resources: this.state.resources,
+        popCostPer10s,
+        secondsUntilUpkeep
+      });
+    }
 
     // Reposition sidebar and header/install UI
     // Keep economy under stats when resizing
@@ -774,10 +802,17 @@ export default class MainScene extends Phaser.Scene {
     // Reposition bottom toolbar
     if (this.bottomToolbarDom) {
       const x = 12;
-      const y = height - 56;
-      this.bottomToolbarDom.setPosition(x, y);
       const root = this.bottomToolbarDom.node as HTMLElement;
-      if (root) root.style.width = `${Math.floor(width - 24)}px`;
+      if (root) {
+        root.style.width = `${Math.floor(width - 24)}px`;
+        const h = root.getBoundingClientRect().height || 56;
+        const y = height - Math.ceil(h) - 12;
+        this.bottomToolbarDom.setPosition(x, y);
+      } else {
+        // fallback
+        const y = height - 72;
+        this.bottomToolbarDom.setPosition(x, y);
+      }
     }
   }
 

@@ -27,25 +27,62 @@ export function updateBottomToolbar(host: BottomToolbarHost, existingDom: Phaser
   const cam = host.scene.cameras.main;
   const width = Math.floor(cam.width - 24);
   const x = 12;
-  const y = cam.height - 56;
+  const y = cam.height - 72; // initial guess; will be corrected on resize using actual height
   const iconSrc = (key: string) => {
     const map: Record<string, string> = { sustainableFarm: "farm" };
-    return `/game/${map[key] ?? key}.svg`;
+    return `/game/${map[key] ?? key}.png`;
   };
   const buttons = host.state.installed.map((s: any) => {
     const key = s.key;
     const type = s.type;
-    return `<button data-sys="${key}" data-type="${type}" style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#0f172a;border:1px solid #1f2937;border-radius:8px;color:#e5e7eb;">
-      <img src="${iconSrc(key)}" width="16" height="16" alt="${key}"/>
-      <span style="font-size:12px;text-transform:capitalize;">${key}</span>
+    return `<button data-sys="${key}" data-type="${type}" class="sap-chip">
+      <span class="sap-chip-icon"><img src="${iconSrc(key)}" width="22" height="22" alt="${key}"/></span>
+      <span class="sap-chip-text">${key}</span>
     </button>`;
   }).join("");
   const html = `
-    <div style="width:${width}px;background:#0b1220ee;border:1px solid #1f2937;border-radius:12px;padding:8px;backdrop-filter:blur(6px);box-shadow:0 6px 18px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;max-width:70%;">${buttons}</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button data-surrender style="padding:6px 10px;background:#ef4444;color:#0b1220;border:none;border-radius:8px;font-weight:700;font-size:12px;">Surrender</button>
-        <button data-buy style="padding:8px 10px;background:#3b82f6;color:#0b1220;border:none;border-radius:8px;font-weight:700;">Buy System</button>
+    <style>
+      .sap-toolbar { 
+        width:${width}px; background: linear-gradient(180deg, rgba(11,18,32,0.95), rgba(8,13,24,0.95));
+        border:1px solid #1f2937; border-radius:12px; padding:10px; backdrop-filter:blur(6px);
+        box-shadow:0 8px 24px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,0.04);
+        display:flex; align-items:center; justify-content:space-between; gap:12px;
+      }
+      .sap-chip { display:flex; align-items:center; gap:10px; padding:8px 12px; color:#e5e7eb; cursor:pointer;
+        background: linear-gradient(180deg,#0f172a,#0b1220); border:1px solid #334155; border-radius:10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+        text-transform:capitalize; font-size:13px; transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+      }
+      .sap-chip:hover { transform: translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.45), 0 0 0 3px rgba(59,130,246,.15);
+        border-color:#3b82f6; }
+      .sap-chip:active { transform: translateY(0); box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  .sap-chip-icon { width:28px; height:28px; display:flex; align-items:center; justify-content:center; filter: drop-shadow(0 1px 0 rgba(0,0,0,.6)); }
+      .sap-chip-text { line-height:1; }
+      .sap-btns { display:flex; align-items:center; gap:10px; }
+      .sap-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border:none; border-radius:10px; font-weight:700; color:#ffffff; cursor:pointer;
+        text-shadow:0 1px 0 rgba(0,0,0,.55); letter-spacing:.2px; box-shadow:0 6px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06); transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease; }
+      .sap-btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+      .sap-btn:active { transform: translateY(0); filter: brightness(0.98); }
+  .sap-btn-buy { background: linear-gradient(180deg,#60a5fa,#2563eb); border:1px solid #1d4ed8; }
+  .sap-btn-surrender { background: linear-gradient(180deg,#f87171,#dc2626); border:1px solid #b91c1c; }
+      .sap-btn-icon { width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; }
+      .sap-btn-icon svg { display:block }
+    </style>
+    <div class="sap-toolbar">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;max-width:70%;">${buttons}</div>
+      <div class="sap-btns">
+        <button data-surrender class="sap-btn sap-btn-surrender">
+          <span class="sap-btn-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff"><path d="M7 2v20M7 3h7a2 2 0 0 1 2 2v0a2 2 0 0 0 2 2h1v7h-7a2 2 0 0 1-2-2v0a2 2 0 0 0-2-2H7" stroke="#ffffff" stroke-opacity="0.0"/></svg>
+          </span>
+          Surrender
+        </button>
+        <button data-buy class="sap-btn sap-btn-buy">
+          <span class="sap-btn-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff"><path d="M6 6h15l-2 9H8L6 6zm0 0L5 3H2" stroke="#ffffff" stroke-opacity="0.0"/></svg>
+          </span>
+          Buy System
+        </button>
       </div>
     </div>`;
   if (!existingDom) {

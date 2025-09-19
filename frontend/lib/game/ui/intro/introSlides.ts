@@ -4,6 +4,7 @@ export interface IntroSlide {
   title: string;
   lines: string[];
   fact?: string;
+  img?: string;
 }
 
 export const introSlides: IntroSlide[] = [
@@ -14,7 +15,8 @@ export const introSlides: IntroSlide[] = [
       "On our current path we blow past 1.5°C in YOUR lifetime.",
       "Every tenth of a degree locks in more irreversible loss."
     ],
-    fact: "Source: IPCC AR6 Synthesis Report"
+    fact: "Source: IPCC AR6 Synthesis Report",
+    img: "/game/planet.png"
   },
   {
     title: "Delay ≠ Defeat",

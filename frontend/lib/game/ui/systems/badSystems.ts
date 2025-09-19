@@ -1,6 +1,5 @@
 import * as Phaser from "phaser";
 import { gameConfig } from "@/data/gameConfig";
-import { getEducationFor } from "../education/education";
 import { spawnFloatingText } from "../effects/floatingText";
 import type { BadSystemKey, GoodSystemKey } from "../../types";
 
@@ -31,48 +30,87 @@ export function promptReplacement(host: BadSystemHost, badKey: BadSystemKey) {
   const goods = Object.values(gameConfig.goodSystems) as any[];
   const tickSec = gameConfig.tickDurationMs / 1000;
   const removeCost = gameConfig.removeBadCost;
-  const edu = getEducationFor(badKey, "bad");
-  const cards = goods.map(g => `
-    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;display:flex;gap:12px;align-items:center;">
-      <div style="width:42px;height:42px;flex:0 0 42px;display:flex;align-items:center;justify-content:center;background:#0f172a;border-radius:8px;border:1px solid #1f2937;">⚙️</div>
+  const cards = goods.map(g => {
+    const pros = (g?.pros ?? []).slice(0, 2);
+    const cons = (g?.cons ?? []).slice(0, 1);
+    return `
+    <div class="sap-card">
+      <div class="sap-card-icon"><img src="${host.iconSrc(g.key)}" width="36" height="36" alt="${g.name}"/></div>
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;">${g.name}</div>
-        <div style="opacity:.85;font-size:12px;margin:4px 0 6px;">${g.blurb}</div>
-        <div style="display:flex;gap:12px;font-size:12px;opacity:.9;">
-          <span>🔨Build: ${g.buildCost}</span>
-          <span>👫Pop req: ${g.populationRequired}</span>
-          <span><img src="/game/coin.svg" width="18" height="18" alt="coins"/> Income: +${(g.resourceIncome / tickSec).toFixed(1)}/s</span>
-          <span>🔥Damage: ${(g.planetImpact / tickSec).toFixed(1)}/s</span>
+        <div style="font-weight:900;font-size:14px;">${g.name}</div>
+        <div style="opacity:.92;font-size:12px;margin:4px 0 4px;">${g.blurb}</div>
+        <div class="sap-tags">
+          <span class="sap-tag">Build: ${g.buildCost}</span>
+          <span class="sap-tag">Pop req: ${g.populationRequired}</span>
+          <span class="sap-tag">💰 +${(g.resourceIncome / tickSec).toFixed(1)}/s</span>
+          <span class="sap-tag">🔥 ${(g.planetImpact / tickSec).toFixed(1)}/s</span>
         </div>
+        ${(pros.length || cons.length) ? `<div style=\"display:flex;gap:12px;margin-top:6px;\">${
+          pros.length ? `<div style=\"flex:1;min-width:0;\"><div style=\"font-weight:800;color:#86efac;margin-bottom:4px;\">Why it's good</div><ul style=\"margin:0;padding-left:16px;\">${pros.map((p: string)=>`<li>${p}</li>`).join("")}</ul></div>` : ""
+        }${
+          cons.length ? `<div style=\"flex:1;min-width:0;\"><div style=\"font-weight:800;color:#fca5a5;margin-bottom:4px;\">Trade-offs</div><ul style=\"margin:0;padding-left:16px;\">${cons.map((c: string)=>`<li>${c}</li>`).join("")}</ul></div>` : ""
+        }</div>` : ""}
       </div>
-      <button data-build="${g.key}" style="padding:8px 10px;background:#10b981;color:#0b1220;border:none;border-radius:8px;font-weight:700;">Build</button>
-    </div>`).join("");
+      <button data-build="${g.key}" class="sap-btn sap-btn-build"><span class="sap-btn-icon" aria-hidden="true">⚒️</span>Build</button>
+    </div>`;
+  }).join("");
   const html = `
-    <style>@keyframes sap-pop {0%{transform:scale(.88);opacity:0;}60%{transform:scale(1.04);opacity:1;}100%{transform:scale(1);}}</style>
-    <div style="width:${panelWidth}px;max-height:${panelMaxHeight}px;overflow:auto;background:#0b1220ee;border:1px solid #1f2937;border-radius:12px;color:#e5e7eb;padding:14px;backdrop-filter:blur(4px);box-shadow:0 10px 30px rgba(0,0,0,.45);will-change:transform,opacity;animation:sap-pop 420ms cubic-bezier(0.34,1.56,0.64,1) both;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-weight:800;font-size:18px;">Manage ${bad.name}</div>
-        <button data-close style="background:#1f2937;color:#e5e7eb;border:none;border-radius:8px;padding:6px 10px;">Close</button>
+    <style>
+      @keyframes sap-pop {0%{transform:scale(.88);opacity:0;}60%{transform:scale(1.04);opacity:1;}100%{transform:scale(1);} }
+      .sap-modal { width:${panelWidth}px; max-height:${panelMaxHeight}px; overflow:auto; color:#e5e7eb; padding:16px;
+        background:linear-gradient(180deg, rgba(11,18,32,.96), rgba(8,13,24,.96)); border:1px solid #1f2937; border-radius:14px;
+        box-shadow:0 12px 36px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04); backdrop-filter: blur(6px);
+        will-change:transform,opacity; animation:sap-pop 420ms cubic-bezier(0.34,1.56,0.64,1) both; }
+      .sap-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .sap-title { font-weight:900; font-size:22px; letter-spacing:.2px; color:#eaf2ff; }
+  .sap-close { background:#334155; color:#ffffff; border:1px solid #475569; border-radius:10px; padding:5px 9px; cursor:pointer; text-shadow:0 1px 0 rgba(0,0,0,.55); font-size:13px; }
+  .sap-top { display:flex; gap:16px; align-items:flex-start; margin-bottom:18px; }
+  .sap-top img { background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:10px; }
+  .sap-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .sap-col h4 { margin:0 0 6px; font-weight:900; font-size:15px; }
+      .sap-pros h4 { color:#86efac; } .sap-cons h4 { color:#fca5a5; }
+      .sap-list { margin:0; padding-left:0; list-style:none; }
+  .sap-list li { display:flex; align-items:flex-start; gap:10px; margin:6px 0; font-size:14px; }
+  .sap-li-icon { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; margin-top:2px; font-size:16px; }
+      .sap-actions { display:flex; gap:8px; margin: 12px 0; }
+      .sap-btn { display:inline-flex; align-items:center; gap:8px; padding:7px 11px; border:none; border-radius:10px; font-weight:700; cursor:pointer; color:#ffffff;
+        text-shadow:0 2px 2px rgba(0,0,0,.75), 0 0 6px rgba(0,0,0,.45); font-size:14px;
+        box-shadow:0 6px 16px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06); transition: transform 120ms ease, filter 120ms ease; }
+      .sap-btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+      .sap-btn:active { transform: translateY(0); filter: brightness(0.98); }
+      .sap-btn-danger { background: linear-gradient(180deg,#f87171,#dc2626); border:1px solid #b91c1c; }
+      .sap-btn-primary { background: linear-gradient(180deg,#60a5fa,#2563eb); border:1px solid #1d4ed8; }
+      .sap-btn-build { background: linear-gradient(180deg,#34d399,#059669); border:1px solid #047857; }
+      .sap-btn-icon { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; }
+      .sap-card { background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:12px; display:flex; gap:12px; align-items:flex-start; }
+  .sap-card-icon { width:52px; height:52px; flex:0 0 52px; display:flex; align-items:center; justify-content:center; background:#0f172a; border-radius:10px; border:1px solid #1f2937; }
+      .sap-tags { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; opacity:.9; }
+      .sap-tag { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px; background:#0f172a; border:1px solid #1f2937; }
+    </style>
+    <div class="sap-modal">
+      <div class="sap-header">
+        <div class="sap-title">Manage ${bad.name}</div>
+        <button data-close class="sap-close">Close</button>
       </div>
-      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
-        <img src="${host.iconSrc(bad.key)}" width="42" height="42" alt="${bad.name}" style="background:#0f172a;border:1px solid #1f2937;border-radius:8px;padding:6px;"/>
-        <div style="flex:1;min-width:0;font-size:12px;opacity:.95;">
-          <div style="margin-bottom:4px;opacity:.9;">${edu.tagline ?? ""}</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div>
-              <div style="font-weight:700;margin-bottom:4px;color:#86efac;">Pros</div>
-              <ul style="margin:0;padding-left:16px;">${edu.pros.map((p: string) => `<li>✅ ${p}</li>`).join("")}</ul>
+      <div class="sap-top">
+        <img src="${host.iconSrc(bad.key)}" width="54" height="54" alt="${bad.name}"/>
+        <div style="flex:1;min-width:0;opacity:.95;">
+          <div style="margin-bottom:6px;opacity:.95;font-size:14px;line-height:1.35;">${bad.description}</div>
+          <div class="sap-cols">
+            <div class="sap-col sap-pros">
+              <h4>Pros</h4>
+              <ul class="sap-list">${bad.pros.map((p: string) => `<li><span class='sap-li-icon' style="color:#86efac;">✔️</span><span>${p}</span></li>`).join("")}</ul>
             </div>
-            <div>
-              <div style="font-weight:700;margin-bottom:4px;color:#fca5a5;">Cons</div>
-              <ul style="margin:0;padding-left:16px;">${edu.cons.map((c: string) => `<li>⚠️ ${c}</li>`).join("")}</ul>
+            <div class="sap-col sap-cons">
+              <h4>Cons</h4>
+              <ul class="sap-list">${bad.cons.map((c: string) => `<li><span class='sap-li-icon' style="color:#fbbf24;">⚠️</span><span>${c}</span></li>`).join("")}</ul>
             </div>
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:10px;margin-bottom:12px;">
-        <button data-remove style="padding:8px 10px;background:#ef4444;color:#0b1220;border:none;border-radius:8px;font-weight:700;">Remove (${removeCost})</button>
-        <button data-open-build style="padding:8px 10px;background:#3b82f6;color:#0b1220;border:none;border-radius:8px;font-weight:700;">Build Good System</button>
+      <div class="sap-actions">
+        <button data-remove class="sap-btn sap-btn-danger"><span class="sap-btn-icon">🗑️</span>Remove (${removeCost})</button>
+        <button data-open-build class="sap-btn sap-btn-primary"><span class="sap-btn-icon">➕</span>Build Good System</button>
       </div>
       <div data-build-list style="display:none;grid-template-columns:1fr;gap:10px;">${cards}</div>
     </div>`;
@@ -85,7 +123,9 @@ export function promptReplacement(host: BadSystemHost, badKey: BadSystemKey) {
   host.setBottomPanelCentered(true);
   dom.addListener("click");
   dom.on("click", (ev: any) => {
-    const t = ev.target as HTMLElement; if (!t) return;
+    const target = ev.target as HTMLElement; if (!target) return;
+    const t = target.closest("[data-close],[data-remove],[data-open-build],[data-build]") as HTMLElement | null;
+    if (!t) return;
     if (t.hasAttribute("data-close")) {
       host.closeBottomPanel(); return;
     }

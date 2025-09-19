@@ -2,10 +2,10 @@ import * as Phaser from "phaser";
 import { gameConfig } from "@/data/gameConfig";
 
 export interface GameOverData {
-    tick: number;
-    planetHealth: number;
-    populationHealth: number;
-    installed: Array<{ type: "bad" | "good"; key: string }>;
+  tick: number;
+  planetHealth: number;
+  populationHealth: number;
+  installed: Array<{ type: "bad" | "good"; key: string }>;
 }
 
 export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRestart: () => void) {
@@ -47,13 +47,13 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
   // Title
   const title = scene.add.text(0, -panelH / 2 + 24, "GAME OVER", {
     fontFamily: "monospace",
-    fontSize: "40px",
+    fontSize: "55px",
     color: "#ffffff",
     stroke: "#e04d4dff",
     strokeThickness: 6,
     fontStyle: "bold"
-  }).setOrigin(0.5, 0);
-  scene.tweens.add({ targets: title, alpha: { from: 0.7, to: 1 }, duration: 1600, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+  }).setOrigin(0.5, 0.2);
+  scene.tweens.add({ targets: title, alpha: { from: 0.7, to: 1 }, duration: 1200, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
 
   // Score (below title)
   const scoreText = scene.add.text(0, -panelH / 2 + 78, `${score}`, {
@@ -64,7 +64,7 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
     strokeThickness: 10,
     fontStyle: "bold"
   }).setOrigin(0.5, 0);
-  scene.tweens.add({ targets: scoreText, scale: { from: 0.95, to: 1 }, duration: 2000, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+  scene.tweens.add({ targets: scoreText, scale: { from: 0.90, to: 1 }, duration: 1000, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
 
   // WORLD SCORE label
   const scoreLabel = scene.add.text(0, scoreText.y + scoreText.height - 14, "WORLD SCORE", {
@@ -74,17 +74,17 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
     stroke: "#78350f",
     strokeThickness: 3,
     fontStyle: "bold"
-  }).setOrigin(0.5, 0);
+  }).setOrigin(0.5, -0.2);
 
   // Humorous encouragement directly under the score label
   const humor = scene.add.text(0, scoreLabel.y + scoreLabel.height + 6,
     "You did your best. The planet filed a polite “do better” request for next run. 🌱", {
-      fontFamily: "monospace",
-      fontSize: "16px",
-      color: "#facc15",
-      align: "center",
-      wordWrap: { width: panelW - 120 }
-    }).setOrigin(0.5, 0);
+    fontFamily: "monospace",
+    fontSize: "16px",
+    color: "#facc15",
+    align: "center",
+    wordWrap: { width: panelW - 120 }
+  }).setOrigin(0.5, -0.2);
 
   // Stats (LEFT aligned now)
   const goodCount = data.installed.filter(s => s.type === "good").length;
@@ -118,7 +118,7 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
 
   // Restart button: yellow gradient rounded pill
   const btnW = 200;
-  const btnY = panelH / 2 - 70;
+  const btnY = panelH / 2 - 50;
   const btnH = 50;
   const grad = scene.add.graphics({ x: -btnW / 2, y: btnY - btnH / 2 }).setDepth(DEPTH_CONTENT).setInteractive(new Phaser.Geom.Rectangle(0, 0, btnW, btnH), Phaser.Geom.Rectangle.Contains);
   const drawButton = (hover = false) => {

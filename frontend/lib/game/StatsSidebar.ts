@@ -27,9 +27,6 @@ export class StatsSidebar {
   <div style="white-space:nowrap;display:flex;justify-content:space-between;margin:6px 0;">
   <span style="white-space:nowrap;display:flex">
   <img style="margin-right:4px" src="/game/coin.svg" width="18" height="18" alt="stats"/> Income</span><b data-inc>+0/s</b></div>
-  <div style="white-space:nowrap;display:flex;justify-content:space-between;margin:6px 0;"><span>👫 Resources needs for ${populationHealth} people  </span><b data-reqps>0/s</b></div>
-  <div style="white-space:nowrap;display:flex;justify-content:space-between;margin:6px 0;"><span>Required (10s)</span><b data-pop>-0/10s</b></div>
-  <div style="margin-top:8px;opacity:.8;font-size:12px;">Next consumption in <b data-count>10</b>s</div>
       </div>
     </div>`;
     this.root = this.scene.add.dom(x, y).createFromHTML(html).setOrigin(0, 0).setDepth(25);
@@ -41,14 +38,8 @@ export class StatsSidebar {
     const node = this.root.node as HTMLElement;
     const resEl = node.querySelector("[data-res]") as HTMLElement | null;
     const incEl = node.querySelector("[data-inc]") as HTMLElement | null;
-    const popEl = node.querySelector("[data-pop]") as HTMLElement | null;
-    const reqPsEl = node.querySelector("[data-reqps]") as HTMLElement | null;
-    const cntEl = node.querySelector("[data-count]") as HTMLElement | null;
     if (resEl) resEl.textContent = `${Math.floor(values.resources)}`;
     if (incEl) incEl.textContent = `+${values.incomePerSec.toFixed(1)}/s`;
-    if (popEl) popEl.textContent = `-${Math.floor(values.popCostPer10s)}/10s`;
-    if (reqPsEl) reqPsEl.textContent = `${values.requiredPerSec.toFixed(1)}/s`;
-    if (cntEl) cntEl.textContent = `${Math.max(0, Math.floor(values.secondsUntilUpkeep))}`;
   }
 
   public reposition(width: number, height: number) {

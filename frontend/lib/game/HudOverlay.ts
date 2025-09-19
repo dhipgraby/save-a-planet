@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { gameConfig } from "@/data/gameConfig";
 
 export class HudOverlay {
   private scene: Phaser.Scene;
@@ -39,6 +40,14 @@ export class HudOverlay {
   private lastPlanetMax?: number;
   private lastPopVal?: number;
   private lastPopMax?: number;
+  // Mini info panel near population crowd
+  private crowdInfoBg?: Phaser.GameObjects.Graphics;
+  private crowdInfoText1?: Phaser.GameObjects.Text; // Resources needs for X people
+  private crowdInfoText2?: Phaser.GameObjects.Text; // Required (10s)
+  private crowdInfoText3?: Phaser.GameObjects.Text; // Next consumption in Ns
+  private crowdInfoDot?: Phaser.GameObjects.Graphics; // colored status dot
+  private crowdInfoLegend?: Phaser.GameObjects.Text; // legend text (Growing/Stable/Declining)
+  private crowdInfoCoin?: Phaser.GameObjects.Image; // coin icon for resources required line
 
   constructor(scene: Phaser.Scene, minimal = false) {
     this.scene = scene;
@@ -57,7 +66,7 @@ export class HudOverlay {
   private static readonly DEPTH_HUD_TEXT = HudOverlay.DEPTH_BASE + 7;
   private static readonly DEPTH_HEAL_BG = HudOverlay.DEPTH_BASE + 8;
   private static readonly DEPTH_HEAL_TEXT = HudOverlay.DEPTH_BASE + 9;
-  private static readonly DEBUG = true; // toggle to false to remove outlines/logs
+  private static readonly DEBUG = false; // toggle to true to show outlines/logs
 
   public redrawHeader(width: number) {
     if (!this.minimal) {
@@ -123,6 +132,13 @@ export class HudOverlay {
   }
 
   public redrawBars(planetPct: number, popPct: number) {
+    // In minimal mode (intro), bars are not created and should not render
+    if (this.minimal) return;
+    // Ensure bars exist; if not, create them (e.g., after switching from minimal to full)
+    if (!this.planetBarBg || !this.populationBarBg || !this.planetBarFill || !this.populationBarFill) {
+      this.createHudBars();
+      if (!this.planetBarBg || !this.populationBarBg || !this.planetBarFill || !this.populationBarFill) return;
+    }
     const layout = this.computeBarLayout();
     const { planetX, planetY, planetW, popX, popY, popW, h } = layout;
     // Always redraw backgrounds so alignment stays correct after resizes or planet size changes
@@ -286,6 +302,8 @@ export class HudOverlay {
       this.scene.input.setDefaultCursor("default");
       this.drawMusicButton(0, 0, w, h, this.musicOn ? 0xfbbf24 : 0x6b7280, this.musicOn ? 0xb45309 : 0x374151);
     });
+    // Ensure initial label/style matches current state
+    this.setMusicOn(this.musicOn);
   }
 
   private drawMusicButton(localX: number, localY: number, w: number, h: number, fill = 0xfbbf24, stroke = 0xb45309) {
@@ -304,6 +322,15 @@ export class HudOverlay {
     if (this.minimal) return;
     if (!this.scoreBoxText) return;
     this.scoreBoxText.setText(`Score: ${score}`);
+  }
+
+  // Public setter to sync music button visual state
+  public setMusicOn(on: boolean) {
+    this.musicOn = on;
+    const w = this.musicBtnBounds.w;
+    const h = this.musicBtnBounds.h;
+    if (this.musicBtnText) this.musicBtnText.setText(`Music: ${this.musicOn ? "On" : "Off"}`);
+    this.drawMusicButton(0, 0, w, h, this.musicOn ? 0xfbbf24 : 0x6b7280, this.musicOn ? 0xb45309 : 0x374151);
   }
 
   public updateHealButtonCooldown(secondsLeft: number) {
@@ -372,12 +399,16 @@ export class HudOverlay {
     if (this.healBtnBg) this.healBtnBg.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_BG).setScrollFactor(0);
     if (this.healBtnText) this.healBtnText.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_TEXT).setScrollFactor(0);
 
+  // Ensure music button is visible
+  if (this.musicBtnBg) this.musicBtnBg.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_BG).setScrollFactor(0);
+  if (this.musicBtnText) this.musicBtnText.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_TEXT).setScrollFactor(0);
+
     // Redraw header to ensure it's properly sized
     const cam = this.scene.cameras.main;
     this.redrawHeader(cam.width);
     // Bring to top explicitly (in case other systems added later at high depth)
-    const bring = (obj?: Phaser.GameObjects.GameObject) => obj && this.scene.children.bringToTop(obj);
-    const objs = [this.topBar, this.topBarTitle, this.topBarLegend, this.scoreBoxBg, this.scoreBoxText, this.planetBarBg, this.populationBarBg, this.planetBarFill, this.populationBarFill, this.planetLabel, this.populationLabel, this.hudText, this.healBtnBg, this.healBtnText];
+  const bring = (obj?: Phaser.GameObjects.GameObject) => obj && this.scene.children.bringToTop(obj);
+  const objs = [this.topBar, this.topBarTitle, this.topBarLegend, this.scoreBoxBg, this.scoreBoxText, this.planetBarBg, this.populationBarBg, this.planetBarFill, this.populationBarFill, this.planetLabel, this.populationLabel, this.hudText, this.healBtnBg, this.healBtnText, this.musicBtnBg, this.musicBtnText];
     objs.forEach(bring);
     if (HudOverlay.DEBUG) {
       // Log depth & visibility once per forceVisibility call
@@ -459,6 +490,128 @@ export class HudOverlay {
         this.healBtnBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
       }
     }
+    // Reposition crowd info panel relative to population crowd alignment
+    this.repositionCrowdInfo();
+  }
+
+  private crowdAnchor() {
+    const cam = this.scene.cameras.main;
+    const planetSize = (this.scene as any).planetSizePx ?? 360;
+    const baseOffsetX = 260; // keep in sync with PopulationVisuals.baseOffsetX
+    const offsetX = planetSize / 2 + baseOffsetX * (planetSize / 400);
+    const crowdSize = (this.scene as any).populationVisuals?.people?.length ?? 0;
+    const outwardShift = Phaser.Math.Linear(0, 40, Phaser.Math.Clamp(crowdSize / 500, 0, 1));
+    const downwardShift = Phaser.Math.Linear(planetSize * 0.07, planetSize * 0.11, Phaser.Math.Clamp(crowdSize / 500, 0, 1));
+    const x = cam.width / 2 + offsetX + outwardShift;
+    const y = cam.height / 2 + downwardShift;
+    return { x, y };
+  }
+
+  private repositionCrowdInfo() {
+    if (!this.crowdInfoBg || !this.crowdInfoText1 || !this.crowdInfoText2 || !this.crowdInfoText3) return;
+    const { x, y } = this.crowdAnchor();
+    const pad = 6;
+    const w = 280;
+    const lineH = 18;
+    // We have 3 main lines plus 1 legend line
+    const totalH = pad * 2 + lineH * 4;
+    const bx = Math.min(Math.max(12, x - w / 2), this.scene.cameras.main.width - w - 12);
+    // Raise higher above the crowd to avoid overlap
+    const by = Math.max(this.headerHeight() + 56, y + 80);
+    this.crowdInfoBg.setPosition(bx, by).clear().fillStyle(0x0b1220, 0.82).fillRoundedRect(0, 0, w, totalH, 8).lineStyle(1, 0x1f2937, 1).strokeRoundedRect(0, 0, w, totalH, 8);
+    this.crowdInfoText1.setPosition(bx + pad, by + pad);
+    // Position coin and shift the text2 line to the right of the coin
+    const line2Y = by + pad + lineH;
+    if (this.crowdInfoCoin) {
+      this.crowdInfoCoin.setPosition(bx + pad, line2Y + Math.floor(lineH / 2)).setOrigin(0, 0.5);
+      this.crowdInfoText2.setPosition(bx + pad + 20, line2Y);
+    } else {
+      this.crowdInfoText2.setPosition(bx + pad, line2Y);
+    }
+    this.crowdInfoText3.setPosition(bx + pad, by + pad + lineH * 2);
+    if (this.crowdInfoLegend) this.crowdInfoLegend.setPosition(bx + pad + 12, by + pad + lineH * 3 - 2);
+    if (this.crowdInfoDot) {
+      // Slightly center the dot vertically with the legend text line
+      const dy = by + pad + lineH * 3 + 5;
+      this.crowdInfoDot.setPosition(bx + pad + 5, dy);
+    }
+  }
+
+  public updateCrowdInfo(opts: { peopleCount: number; requiredPerSec: number; requiredPer10s?: number; incomePerSec: number; resources?: number; popCostPer10s: number; secondsUntilUpkeep: number }) {
+    if (this.minimal) return;
+    // Ensure elements exist
+    if (!this.crowdInfoBg) this.crowdInfoBg = this.scene.add.graphics({ x: 0, y: 0 }).setDepth(HudOverlay.DEPTH_LABEL + 2).setScrollFactor(0);
+  if (!this.crowdInfoText1) this.crowdInfoText1 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "12px", color: "#e5e7eb" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
+  if (!this.crowdInfoText2) this.crowdInfoText2 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "12px", color: "#e5e7eb" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
+  if (!this.crowdInfoText3) this.crowdInfoText3 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "11px", color: "#cbd5e1" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
+    if (!this.crowdInfoDot) this.crowdInfoDot = this.scene.add.graphics({ x: 0, y: 0 }).setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0);
+  if (!this.crowdInfoLegend) this.crowdInfoLegend = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "11px", color: "#cbd5e1" }).setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0);
+  if (!this.crowdInfoCoin) this.crowdInfoCoin = this.scene.add.image(0, 0, "coin").setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0).setScale(0.8).setOrigin(0, 0.5).setTint(0xfbbf24);
+    
+  // Line 1: concise requirement summary (only per-second shown)
+  this.crowdInfoText1.setText(`👫 Resources need for ${opts.peopleCount} — (${opts.requiredPerSec.toFixed(0)}/s)`);
+  // Line 2: actual deduction amount per 10s with coin icon
+  this.crowdInfoText2.setText(`Consumes 10s: -${Math.floor(opts.popCostPer10s)}`);
+  // Line 3: timer to next deduction
+  this.crowdInfoText3.setText(`Next: ${Math.max(0, Math.floor(opts.secondsUntilUpkeep))}s`);
+
+    // Status dot + legend
+  const green = 0x10b981; // increasing
+    const grey = 0x9ca3af; // stable
+  const red = 0xef4444; // decreasing
+    let statusColor = grey;
+  let statusLabel = "Stable";
+  const denom = Math.max(opts.requiredPerSec, 0.0001);
+  const ratio = opts.incomePerSec / denom;
+  const healMult = gameConfig.populationHealThresholdMultiplier ?? 1.2;
+  if (ratio >= healMult) { statusColor = green; statusLabel = "Increasing"; }
+  else if (ratio < 1) { statusColor = red; statusLabel = "Decreasing"; }
+    this.crowdInfoDot.clear().fillStyle(statusColor, 1).fillCircle(0, 0, 5).lineStyle(1, 0x1f2937, 1).strokeCircle(0, 0, 5);
+  this.crowdInfoLegend.setText(`Trend: ${statusLabel}`);
+
+    this.repositionCrowdInfo();
+  }
+
+  // Clean up all created HUD elements safely
+  public destroy() {
+    const destroyObj = (o?: Phaser.GameObjects.GameObject) => { try { o && o.destroy(); } catch { /* no-op */ } };
+    destroyObj(this.topBar); this.topBar = undefined as any;
+    destroyObj(this.topBarTitle); this.topBarTitle = undefined as any;
+    destroyObj(this.topBarLegend); this.topBarLegend = undefined as any;
+    destroyObj(this.scoreBoxBg); this.scoreBoxBg = undefined;
+    destroyObj(this.scoreBoxText); this.scoreBoxText = undefined;
+    destroyObj(this.planetBarBg); this.planetBarBg = undefined as any;
+    destroyObj(this.planetBarFill); this.planetBarFill = undefined as any;
+    destroyObj(this.populationBarBg); this.populationBarBg = undefined as any;
+    destroyObj(this.populationBarFill); this.populationBarFill = undefined as any;
+    destroyObj(this.planetLabel); this.planetLabel = undefined as any;
+    destroyObj(this.populationLabel); this.populationLabel = undefined as any;
+    destroyObj(this.hudText); this.hudText = undefined as any;
+    destroyObj(this.healBtnBg); this.healBtnBg = undefined;
+    destroyObj(this.healBtnText); this.healBtnText = undefined;
+    destroyObj(this.installBarBg); this.installBarBg = undefined;
+    destroyObj(this.installBarFill); this.installBarFill = undefined;
+    destroyObj(this.installLabel); this.installLabel = undefined;
+    destroyObj(this.musicBtnBg); this.musicBtnBg = undefined;
+    destroyObj(this.musicBtnText); this.musicBtnText = undefined;
+    destroyObj(this.crowdInfoBg); this.crowdInfoBg = undefined;
+    destroyObj(this.crowdInfoText1); this.crowdInfoText1 = undefined;
+    destroyObj(this.crowdInfoText2); this.crowdInfoText2 = undefined;
+    destroyObj(this.crowdInfoText3); this.crowdInfoText3 = undefined;
+    destroyObj(this.crowdInfoDot); this.crowdInfoDot = undefined;
+    destroyObj(this.crowdInfoLegend); this.crowdInfoLegend = undefined;
+    destroyObj(this.crowdInfoCoin); this.crowdInfoCoin = undefined;
+  }
+
+  // Expand a minimal HUD (intro) into full HUD without losing existing music button
+  public expandToFull() {
+    if (!this.minimal) return;
+    this.minimal = false;
+    this.createHudText();
+    this.createHudBars();
+    const cam = this.scene.cameras.main;
+    this.redrawHeader(cam.width);
+    this.forceVisibility();
   }
 }
 
