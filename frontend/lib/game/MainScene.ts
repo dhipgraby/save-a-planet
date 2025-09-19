@@ -67,6 +67,8 @@ export default class MainScene extends Phaser.Scene {
   private introDom: Phaser.GameObjects.DOMElement | null = null;
   private introSequence?: IntroSequence; // extracted intro sequence manager
   private introActive: boolean = false;
+  // Background music
+  private bgm?: Phaser.Sound.BaseSound;
 
   // Confetti particle texture guard
   private confettiReady: boolean = false;
@@ -108,10 +110,35 @@ export default class MainScene extends Phaser.Scene {
       this.load.image(`alien${c}_walk2`, `/game/sprites/people/alien${c}_walk2.png`);
       // optional extra frames (jump/swim) could be added later
     });
+    // Background music (space in filename must be URL-encoded). Stored in Next.js public/music
+    // If you rename the file to remove spaces, update the path accordingly.
+    this.load.audio("bgm_main", ["/music/Underneath%20Skies.mp3"]);
   }
 
   create() {
     this.initState();
+    // Start background music immediately (during intro) so it plays throughout.
+    this.ensureMusic();
+    // Ensure HUD exists early so we can show the music toggle during intro
+    // this.ensureHud();
+    // Create music toggle immediately (will be recreated/repositioned safely later in startGame)
+    if (this.hud && (this.hud as any).createMusicButton) {
+      (this.hud as any).createMusicButton((on: boolean) => {
+        if (this.bgm) {
+          const anySound: any = this.bgm as any;
+          if (typeof anySound.setMute === "function") {
+            anySound.setMute(!on);
+          } else {
+            if (!on) {
+              anySound.__prevVol = anySound.volume ?? 0.4;
+              anySound.setVolume(0);
+            } else {
+              anySound.setVolume(anySound.__prevVol ?? 0.4);
+            }
+          }
+        }
+      });
+    }
     // Launch educational intro first
     this.startIntroSequence();
     // Handle resize events to keep elements anchored (safe pre-world)
@@ -127,6 +154,13 @@ export default class MainScene extends Phaser.Scene {
         } catch { /* ignore */ }
       }
       this.populationVisuals = undefined;
+      if (this.bgm) {
+        try {
+          this.bgm.stop();
+        } catch { /* ignore */ }
+        this.bgm.destroy();
+        this.bgm = undefined;
+      }
     });
   }
 
@@ -164,10 +198,12 @@ export default class MainScene extends Phaser.Scene {
 
   private ensureHud() {
     if (this.hud) return;
-    this.hud = new HudOverlay(this);
-    this.hud.createHeader();
-    this.hud.createHudText();
-    this.hud.createHudBars();
+    // If intro active, start with minimal HUD (only music button)
+    this.hud = new HudOverlay(this, this.introActive === true);
+    if (!this.introActive) {
+      this.hud.createHudText();
+      this.hud.createHudBars();
+    }
   }
 
   // ----- Population Visuals Integration -----
@@ -236,6 +272,27 @@ export default class MainScene extends Phaser.Scene {
     this.bottomToolbarDom = null;
     this.startTickLoop();
 
+    // Create music toggle button in HUD (after HUD exists)
+    if (this.hud && (this.hud as any).createMusicButton) {
+      (this.hud as any).createMusicButton((on: boolean) => {
+        if (this.bgm) {
+          // Mute/unmute without stopping to preserve playback position.
+          // Some Phaser typings may not expose setMute; fallback to volume manipulation.
+          const anySound: any = this.bgm as any;
+          if (typeof anySound.setMute === "function") {
+            anySound.setMute(!on);
+          } else {
+            if (!on) {
+              anySound.__prevVol = anySound.volume ?? 0.4;
+              anySound.setVolume(0);
+            } else {
+              anySound.setVolume(anySound.__prevVol ?? 0.4);
+            }
+          }
+        }
+      });
+    }
+
     // Make sure all UI elements are visible and properly positioned
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
@@ -275,8 +332,34 @@ export default class MainScene extends Phaser.Scene {
   // Intro sequence now delegated to IntroSequence module
   private startIntroSequence() {
     if (this.introSequence?.isActive()) return;
+    this.introActive = true;
     this.introSequence = new IntroSequence(this, {
       onComplete: () => {
+        // Switch to full HUD now that gameplay will begin
+        if (this.hud) {
+          // Recreate full HUD elements if we were minimal
+          if ((this.hud as any).minimal) {
+            this.hud = new HudOverlay(this, false);
+            this.hud.createHudText();
+            this.hud.createHudBars();
+            // Recreate music button (keeping prior mute state if any)
+            if ((this as any).bgm) {
+              const bgmAny: any = (this as any).bgm;
+              const wasMuted = typeof bgmAny.mute === "boolean" ? bgmAny.mute : (bgmAny.volume === 0);
+              (this.hud as any).createMusicButton((on: boolean) => {
+                const anySound: any = this.bgm as any;
+                if (anySound) {
+                  if (typeof anySound.setMute === "function") anySound.setMute(!on);
+                  else anySound.setVolume(on ? (anySound.__prevVol ?? 0.4) : 0);
+                }
+              });
+              // Reflect previous state
+              if (wasMuted) {
+                const btnText = (this.hud as any).musicBtnText; if (btnText) btnText.setText("Music: Off");
+              }
+            }
+          }
+        }
         this.showStartOverlay();
       },
       onSkipToEnd: () => { /* optional hook for analytics */ }
@@ -358,6 +441,7 @@ export default class MainScene extends Phaser.Scene {
     const stressThreshold = gameConfig.planet.max * gameConfig.planetStressThresholdPct;
     if (this.state.planetHealth < stressThreshold) {
       this.state.populationHealth -= gameConfig.planetStressPenalty;
+      spawnFloatingText(this, "Planet is under stress! Population -1", { color: "#f87171" });
     }
 
     // Clamp values and check game over
@@ -465,7 +549,6 @@ export default class MainScene extends Phaser.Scene {
     if (!this.hud) {
       console.warn("[DEBUG] Creating HUD Overlay");
       this.hud = new HudOverlay(this);
-      this.hud.createHeader();
       this.hud.createHudText();
       this.hud.createHudBars();
       this.hud.reposition(this.cameras.main.width);
@@ -500,6 +583,23 @@ export default class MainScene extends Phaser.Scene {
 
     // Force redraw of header to ensure visibility
     this.hud.redrawHeader(this.cameras.main.width);
+  }
+
+  // ----- Music helpers -----
+  private ensureMusic() {
+    // Guard for environments with NoAudioSoundManager
+    const sm: any = this.sound as any;
+    if (!sm) return;
+    if (!this.bgm) {
+      if (!this.sound.get("bgm_main")) {
+        // If asset somehow not loaded, attempt dynamic load (Phaser supports late load)
+        try {
+          this.load.audio("bgm_main", ["/music/Underneath%20Skies.mp3"]); this.load.start();
+        } catch { /* ignore */ }
+      }
+      this.bgm = this.sound.add("bgm_main", { loop: true, volume: 0.4 });
+      this.bgm.play();
+    }
   }
 
   private tryHeal() {

@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 
 export class HudOverlay {
   private scene: Phaser.Scene;
+  private minimal: boolean; // when true (intro) only show music button
   private hudText!: Phaser.GameObjects.Text;
   private planetBarBg!: Phaser.GameObjects.Graphics;
   private planetBarFill!: Phaser.GameObjects.Graphics;
@@ -28,14 +29,20 @@ export class HudOverlay {
   private healOnClick?: () => void;
   private healBtnBounds = { x: 10, y: 10, w: 120, h: 26 };
   private healBtnLastState: "ready" | "cooldown" | null = null;
+  // Music toggle button
+  private musicBtnBg?: Phaser.GameObjects.Graphics;
+  private musicBtnText?: Phaser.GameObjects.Text;
+  private musicOn: boolean = true;
+  private musicBtnBounds = { x: 0, y: 0, w: 90, h: 22 };
   // Track last numeric values for labels
   private lastPlanetVal?: number;
   private lastPlanetMax?: number;
   private lastPopVal?: number;
   private lastPopMax?: number;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, minimal = false) {
     this.scene = scene;
+    this.minimal = minimal;
   }
 
   // Centralized depth constants (very high to avoid being overshadowed)
@@ -52,74 +59,48 @@ export class HudOverlay {
   private static readonly DEPTH_HEAL_TEXT = HudOverlay.DEPTH_BASE + 9;
   private static readonly DEBUG = true; // toggle to false to remove outlines/logs
 
-  public createHeader() {
-    const cam = this.scene.cameras.main;
-    const h = this.headerHeight();
-    this.topBar = this.scene.add.graphics().setDepth(HudOverlay.DEPTH_HEADER).setScrollFactor(0);
-    this.topBar.clear().fillStyle(0x0b1220, 0.92).fillRect(0, 0, cam.width, h).lineStyle(1, 0x1f2937, 1).strokeRect(0.5, 0.5, cam.width - 1, h - 1);
-    if (HudOverlay.DEBUG) {
-      // Add a bright temporary outline to confirm visibility
-      this.topBar.lineStyle(2, 0x10b981, 0.65).strokeRect(2, 2, cam.width - 4, h - 4);
-    }
-    this.topBarTitle = this.scene.add.text(12, 12, "Save a Planet — MVP", { fontFamily: "monospace", fontSize: "18px", color: "#e5e7eb" }).setDepth(HudOverlay.DEPTH_HEADER_TEXT).setScrollFactor(0);
-    this.topBarLegend = this.scene.add
-      .text(0, 18, "💵 income • 🔥 damage", { fontFamily: "monospace", fontSize: "12px", color: "#9ca3af" })
-      .setDepth(HudOverlay.DEPTH_HEADER_TEXT)
-      .setScrollFactor(0);
-    const legendW = this.topBarLegend.width;
-    this.topBarLegend.setPosition(cam.width - legendW - 12, 18);
-    // Score box below legend at right
-    const boxW = this.scoreBoxWidth;
-    const boxH = this.scoreBoxHeight;
-    const x = cam.width - boxW - 12;
-    const y = this.headerHeight() + this.scoreBoxOffsetY;
-    if (!this.scoreBoxBg) this.scoreBoxBg = this.scene.add.graphics().setDepth(HudOverlay.DEPTH_SCORE_BG).setScrollFactor(0);
-    this.scoreBoxBg
-      .clear()
-      .fillStyle(0x0f172a, 0.95)
-      .fillRoundedRect(x, y, boxW, boxH, 8)
-      .lineStyle(1, 0x334155, 1)
-      .strokeRoundedRect(x, y, boxW, boxH, 8);
-    if (HudOverlay.DEBUG) this.scoreBoxBg.lineStyle(1, 0x10b981, 0.4).strokeRoundedRect(x + 1, y + 1, boxW - 2, boxH - 2, 7);
-    if (!this.scoreBoxText)
-      this.scoreBoxText = this.scene.add
-        .text(x + boxW / 2, y + boxH / 2, "Score: 0", { fontFamily: "monospace", fontSize: "14px", color: "#e5e7eb" })
-        .setDepth(HudOverlay.DEPTH_SCORE_TEXT)
-        .setOrigin(0.5)
-        .setScrollFactor(0);
-  }
-
   public redrawHeader(width: number) {
-    if (!this.topBar) return;
-    this.topBar.clear().fillStyle(0x0b1220, 1).fillRect(0, 0, width, this.headerHeight()).lineStyle(1, 0x1f2937, 1).strokeRect(0.5, 0.5, width - 1, this.headerHeight() - 1);
-    if (this.topBarTitle) this.topBarTitle.setPosition(12, 12);
-    if (this.topBarLegend) {
-      const legendW = this.topBarLegend.width;
-      this.topBarLegend.setPosition(width - legendW - 12, 18);
+    if (!this.minimal) {
+      if (this.topBar) {
+        this.topBar.clear().fillStyle(0x0b1220, 1).fillRect(0, 0, width, this.headerHeight()).lineStyle(1, 0x1f2937, 1).strokeRect(0.5, 0.5, width - 1, this.headerHeight() - 1);
+      }
+      if (this.topBarTitle) this.topBarTitle.setPosition(12, 12);
+      if (this.topBarLegend) {
+        const legendW = this.topBarLegend.width;
+        this.topBarLegend.setPosition(width - legendW - 12, 18);
+      }
+      if (this.scoreBoxBg || this.scoreBoxText) {
+        const boxW = this.scoreBoxWidth;
+        const boxH = this.scoreBoxHeight;
+        const x = width - boxW - 12;
+        const y = this.headerHeight() + this.scoreBoxOffsetY;
+        if (this.scoreBoxBg) this.scoreBoxBg.clear().fillStyle(0x0f172a, 1).fillRoundedRect(x, y, boxW, boxH, 8).lineStyle(1, 0x334155, 1).strokeRoundedRect(x, y, boxW, boxH, 8);
+        if (this.scoreBoxText) this.scoreBoxText.setPosition(x + boxW / 2, y + boxH / 2).setOrigin(0.5);
+      }
+      if (this.healBtnBg && this.healBtnBounds) {
+        const layout = this.computeBarLayout();
+        const w = this.healBtnBounds.w;
+        const h = this.healBtnBounds.h;
+        const xCenter = layout.planetX + layout.planetW / 2 - w / 2;
+        const yPos = layout.planetY + layout.h + 10;
+        this.healBtnBounds.x = xCenter;
+        this.healBtnBounds.y = yPos;
+        this.healBtnBg.setPosition(xCenter, yPos);
+        this.healBtnBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
+        this.drawHealButton(0, 0, w, h);
+        if (this.healBtnText) this.healBtnText.setPosition(xCenter + w / 2, yPos + h / 2);
+      }
     }
-    // Reposition score box
-    if (this.scoreBoxBg || this.scoreBoxText) {
-      const boxW = this.scoreBoxWidth;
-      const boxH = this.scoreBoxHeight;
-      const x = width - boxW - 12;
-      const y = this.headerHeight() + this.scoreBoxOffsetY;
-      if (this.scoreBoxBg) this.scoreBoxBg.clear().fillStyle(0x0f172a, 1).fillRoundedRect(x, y, boxW, boxH, 8).lineStyle(1, 0x334155, 1).strokeRoundedRect(x, y, boxW, boxH, 8);
-      if (this.scoreBoxText) this.scoreBoxText.setPosition(x + boxW / 2, y + boxH / 2).setOrigin(0.5);
-    }
-    // Ensure heal button interactive area updated after possible resize
-    if (this.healBtnBg && this.healBtnBounds) {
-      const layout = this.computeBarLayout();
-      const w = this.healBtnBounds.w;
-      const h = this.healBtnBounds.h;
-      const xCenter = layout.planetX + layout.planetW / 2 - w / 2;
-      const yPos = layout.planetY + layout.h + 10;
-      this.healBtnBounds.x = xCenter;
-      this.healBtnBounds.y = yPos;
-      this.healBtnBg.setPosition(xCenter, yPos);
-      // Keep local interactive rect (0,0,w,h) not world coords to avoid reflow flicker
-      this.healBtnBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
-      this.drawHealButton(0, 0, w, h);
-      if (this.healBtnText) this.healBtnText.setPosition(xCenter + w / 2, yPos + h / 2);
+    if (this.musicBtnBg && this.musicBtnText) {
+      const w = this.musicBtnBounds.w;
+      const h = this.musicBtnBounds.h;
+      const x = width - w - 12;
+      const y = 12;
+      this.musicBtnBounds.x = x;
+      this.musicBtnBounds.y = y;
+      this.musicBtnBg.setPosition(x, y);
+      this.drawMusicButton(0, 0, w, h);
+      this.musicBtnText.setPosition(x + w / 2, y + h / 2);
     }
   }
 
@@ -128,6 +109,7 @@ export class HudOverlay {
   }
 
   public createHudBars() {
+    if (this.minimal) return;
     const layout = this.computeBarLayout();
     const { planetX, planetY, popX, popY } = layout;
     this.planetBarBg = this.scene.add.graphics({ x: 0, y: 0 }).setDepth(HudOverlay.DEPTH_BAR_BG).setScrollFactor(0);
@@ -162,10 +144,12 @@ export class HudOverlay {
   }
 
   public createHudText() {
-    this.hudText = this.scene.add.text(12, this.headerHeight() + 8, "", { fontFamily: "monospace", fontSize: "16px", color: "#ffffff" }).setDepth(HudOverlay.DEPTH_HUD_TEXT).setScrollFactor(0);
+    if (this.minimal) return;
+    this.hudText = this.scene.add.text(12, this.headerHeight() - 30, "", { fontFamily: "monospace", fontSize: "16px", color: "#ffffff" }).setDepth(HudOverlay.DEPTH_HUD_TEXT).setScrollFactor(0);
   }
 
   public setHudText(text: string) {
+    if (this.minimal) return;
     // Guard against cases where hudText was never created or got destroyed by a scene restart
     if (!this.hudText || (this.hudText as any).destroyed) {
       this.createHudText();
@@ -223,6 +207,7 @@ export class HudOverlay {
 
   // ---- Heal button API ----
   public createHealButton(onClick: () => void) {
+    if (this.minimal) return;
     this.healOnClick = onClick;
     const layout = this.computeBarLayout();
     const w = this.healBtnBounds.w;
@@ -266,12 +251,63 @@ export class HudOverlay {
     });
   }
 
+  // Music button API (called from scene after HUD exists)
+  public createMusicButton(onToggle: (on: boolean) => void) {
+    const w = this.musicBtnBounds.w;
+    const h = this.musicBtnBounds.h;
+    const cam = this.scene.cameras.main;
+    const x = cam.width - w - 12;
+    const y = 12;
+    this.musicBtnBounds.x = x; this.musicBtnBounds.y = y;
+    if (!this.musicBtnBg) {
+      this.musicBtnBg = this.scene.add.graphics({ x, y }).setDepth(HudOverlay.DEPTH_HEAL_BG).setScrollFactor(0); // reuse depth tier
+    } else {
+      this.musicBtnBg.setPosition(x, y);
+    }
+    this.musicBtnBg.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
+    if (!this.musicBtnText) {
+      this.musicBtnText = this.scene.add.text(x + w / 2, y + h / 2, "Music: On", { fontFamily: "monospace", fontSize: "11px", color: "#0b1220" }).setDepth(HudOverlay.DEPTH_HEAL_TEXT).setOrigin(0.5).setScrollFactor(0);
+    } else {
+      this.musicBtnText.setPosition(x + w / 2, y + h / 2).setOrigin(0.5);
+    }
+    this.drawMusicButton(0, 0, w, h, 0xfbbf24, 0xb45309);
+    this.musicBtnBg.removeAllListeners();
+    this.musicBtnBg.on("pointerdown", () => {
+      this.musicOn = !this.musicOn;
+      if (this.musicBtnText) this.musicBtnText.setText(`Music: ${this.musicOn ? "On" : "Off"}`);
+      this.drawMusicButton(0, 0, w, h, this.musicOn ? 0xfbbf24 : 0x6b7280, this.musicOn ? 0xb45309 : 0x374151);
+      onToggle(this.musicOn);
+    });
+    this.musicBtnBg.on("pointerover", () => {
+      this.scene.input.setDefaultCursor("pointer");
+      this.drawMusicButton(0, 0, w, h, this.musicOn ? 0xfcd34d : 0x9ca3af, this.musicOn ? 0xb45309 : 0x4b5563);
+    });
+    this.musicBtnBg.on("pointerout", () => {
+      this.scene.input.setDefaultCursor("default");
+      this.drawMusicButton(0, 0, w, h, this.musicOn ? 0xfbbf24 : 0x6b7280, this.musicOn ? 0xb45309 : 0x374151);
+    });
+  }
+
+  private drawMusicButton(localX: number, localY: number, w: number, h: number, fill = 0xfbbf24, stroke = 0xb45309) {
+    if (!this.musicBtnBg) return;
+    this.musicBtnBg
+      .clear()
+      .fillStyle(0x000000, 0.25)
+      .fillRoundedRect(localX + 2, localY + 2, w, h, 6)
+      .fillStyle(fill, 1)
+      .fillRoundedRect(localX, localY, w, h, 6)
+      .lineStyle(1, stroke, 1)
+      .strokeRoundedRect(localX, localY, w, h, 6);
+  }
+
   public setScore(score: number) {
+    if (this.minimal) return;
     if (!this.scoreBoxText) return;
     this.scoreBoxText.setText(`Score: ${score}`);
   }
 
   public updateHealButtonCooldown(secondsLeft: number) {
+    if (this.minimal) return;
     if (!this.healBtnBg || !this.healBtnText) return;
     if (secondsLeft > 0) {
       if (this.healBtnLastState !== "cooldown" || !this.healBtnText.text.startsWith("Heal in")) {
@@ -305,6 +341,13 @@ export class HudOverlay {
 
   // Force all HUD elements to be visible and in front
   public forceVisibility() {
+    if (this.minimal) {
+      const cam = this.scene.cameras.main;
+      this.redrawHeader(cam.width);
+      if (this.musicBtnBg) this.musicBtnBg.setVisible(true);
+      if (this.musicBtnText) this.musicBtnText.setVisible(true);
+      return;
+    }
     // Ensure top bar is visible
     if (this.topBar) this.topBar.setVisible(true).setDepth(HudOverlay.DEPTH_HEADER).setScrollFactor(0);
     if (this.topBarTitle) this.topBarTitle.setVisible(true).setDepth(HudOverlay.DEPTH_HEADER_TEXT).setScrollFactor(0);
@@ -379,6 +422,7 @@ export class HudOverlay {
 
   // Update numeric values shown in labels (called from MainScene)
   public setBarValues(planetVal: number, planetMax: number, popVal: number, popMax: number) {
+    if (this.minimal) return;
     this.lastPlanetVal = planetVal;
     this.lastPlanetMax = planetMax;
     this.lastPopVal = popVal;
@@ -388,6 +432,9 @@ export class HudOverlay {
   }
 
   public reposition(width: number) {
+    if (this.minimal) {
+      this.redrawHeader(width); return;
+    }
     // Extend reposition to also move heal button below bars after any resize
     this.redrawHeader(width);
     if (this.installBarBg || this.installLabel) {
