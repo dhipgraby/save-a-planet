@@ -190,7 +190,7 @@ export default class MainScene extends Phaser.Scene {
       } catch { /* ignore */ }
       if (desiredOn === null) {
         const bgmAny: any = this.bgm as any;
-        const isMuted = bgmAny ? (typeof bgmAny.mute === "boolean" ? bgmAny.mute : (bgmAny.volume === 0)) : true;
+        const isMuted = bgmAny ? (typeof bgmAny.mute === "boolean" ? bgmAny.mute : (bgmAny.volume === 0)) : false;
         desiredOn = !isMuted;
       }
       if ((this.hud as any).setMusicOn && desiredOn !== null) {
@@ -572,11 +572,11 @@ export default class MainScene extends Phaser.Scene {
           this.load.audio("bgm_main", ["/music/Underneath%20Skies.mp3"]); this.load.start();
         } catch { /* ignore */ }
       }
-      // Determine initial mute state from localStorage (default Off)
-      let startMuted = true;
+      // Determine initial mute state from localStorage (default On)
+      let startMuted = false;
       try {
         const saved = window?.localStorage?.getItem("sap_audio_muted");
-        if (saved === "0" || saved === "false") startMuted = false;
+        if (saved === "1" || saved === "true") startMuted = true;
       } catch { /* SSR or blocked storage */ }
       // Create sound with persisted mute state
       this.bgm = this.sound.add("bgm_main", { loop: true, volume: 0.4, mute: startMuted as any });
