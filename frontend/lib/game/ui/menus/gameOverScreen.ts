@@ -112,6 +112,46 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
     align: "left"
   }).setOrigin(0, 0);
 
+  // Icon columns (RIGHT side): show which industries were installed
+  const goodSystems = data.installed.filter(s => s.type === "good").map(s => s.key);
+  const badSystems = data.installed.filter(s => s.type === "bad").map(s => s.key);
+  const colRightX = panelW / 2 - 260; // start x for right column inside panel
+  const iconSize = 36;
+  const iconPad = 10;
+  const labelStyle = { fontFamily: "monospace", fontSize: "16px", color: "#f3f4f6" } as const;
+
+  const goodLabel = scene.add.text(colRightX, statsTop, "Good Systems", labelStyle).setOrigin(0, 0);
+  let x = colRightX;
+  let y = goodLabel.y + goodLabel.height + 8;
+  if (goodSystems.length === 0) {
+    const none = scene.add.text(x, y + 8, "None", { fontFamily: "monospace", fontSize: "14px", color: "#9ca3af" }).setOrigin(0, 0);
+    container.add([none]);
+  } else {
+    goodSystems.forEach((key) => {
+      const img = scene.add.image(x + iconSize / 2, y + iconSize / 2, key);
+      img.setDisplaySize(iconSize, iconSize).setDepth(DEPTH_CONTENT);
+      x += iconSize + iconPad;
+      container.add([img]);
+    });
+  }
+
+  const badLabelY = y + iconSize + 18;
+  const badLabel = scene.add.text(colRightX, badLabelY, "Bad Systems", labelStyle).setOrigin(0, 0);
+  x = colRightX;
+  y = badLabel.y + badLabel.height + 8;
+  if (badSystems.length === 0) {
+    const none = scene.add.text(x, y + 8, "None", { fontFamily: "monospace", fontSize: "14px", color: "#9ca3af" }).setOrigin(0, 0);
+    container.add([none]);
+  } else {
+    badSystems.forEach((key) => {
+      const img = scene.add.image(x + iconSize / 2, y + iconSize / 2, key);
+      img.setDisplaySize(iconSize, iconSize).setDepth(DEPTH_CONTENT);
+      x += iconSize + iconPad;
+      container.add([img]);
+    });
+  }
+  container.add([goodLabel, badLabel]);
+
   // Narrative (wrap inside panel width)
   const narrative = computeNarrative(data.planetHealth, data.populationHealth, goodCount, badCount);
   const narrativeText = scene.add.text(-panelW / 2 + 36, statsText.y + statsText.height + 20, narrative, {
