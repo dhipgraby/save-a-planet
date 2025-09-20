@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="https://save-a-planet.vercel.app/game/logo.png" alt="Save a Planet" width="120" />
+	<img src="https://save-a-planet.vercel.app/game/logo.png" alt="Save a Planet" width="200" />
 </p>
 
 <h1 align="center">Save a Planet</h1>
