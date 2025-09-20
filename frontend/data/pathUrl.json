@@ -4,5 +4,9 @@
     "dashboard": {
         "linkText": "Dashboard",
         "linkHref": "/dashboard"
+    },
+    "game": {
+        "linkText": "Game",
+        "linkHref": "/game"
     }
 }

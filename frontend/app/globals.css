@@ -137,5 +137,52 @@ label {
 
 .main-gradient {
   background: #020024;
-background: linear-gradient(11deg,rgba(2, 0, 36, 1) 0%, rgba(49, 49, 115, 1) 72%, rgba(78, 56, 89, 1) 100%);
+  background: linear-gradient(11deg, rgba(2, 0, 36, 1) 0%, rgba(49, 49, 115, 1) 72%, rgba(78, 56, 89, 1) 100%);
+}
+
+/* Modal pop animation used by BadSystemModal */
+@keyframes sap-pop {
+  0% {
+    transform: scale(0.88);
+    opacity: 0;
+  }
+
+  60% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Welcome/Intro animations */
+@keyframes sap-bob {
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+
+/* Left-to-right text opacity reveal without moving position */
+.sap-text-reveal {
+  animation: sap-text-reveal 3200ms ease forwards;
+}
+
+@keyframes sap-text-reveal {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }

@@ -21,16 +21,16 @@
                 "cwd": "backend"
             }
         },
-        {
-            "type": "npm",
-            "script": "prisma",
-            "problemMatcher": [],
-            "label": "DB",
-            "detail": "npx prisma studio",
-            "options": {
-                "cwd": "backend"
-            }
-        },
+        // {
+        //     "type": "npm",
+        //     "script": "prisma",
+        //     "problemMatcher": [],
+        //     "label": "DB",
+        //     "detail": "npx prisma studio",
+        //     "options": {
+        //         "cwd": "backend"
+        //     }
+        // },
         {
             "type": "npm",
             "script": "dev",
@@ -46,7 +46,7 @@
             "dependsOn": [
                 "AUTH",
                 "USERS",
-                "DB",
+                // "DB",
                 "FRONT"
             ],
             "dependsOrder": "parallel",
