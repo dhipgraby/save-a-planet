@@ -48,6 +48,8 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
   for (let i = 0; i < 3; i++) {
     panel.lineStyle(1, 0x38bdf8, 0.12 - i * 0.03).strokeRoundedRect(-panelW / 2 - i, -panelH / 2 - i, panelW + i * 2, panelH + i * 2, 20 + i);
   }
+  // Add the panel first so it sits behind all other elements in the container draw order
+  container.add(panel);
 
   // Title
   const title = scene.add.text(0, -panelH / 2 + 24, "GAME OVER", {
@@ -202,7 +204,7 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
     grad.disableInteractive(); cleanup(); onRestart();
   });
 
-  container.add([panel, title, scoreText, scoreLabel, humor, statsText, narrativeText, grad, btnLabel]);
+  container.add([title, scoreText, scoreLabel, humor, statsText, narrativeText, grad, btnLabel]);
 
   function cleanup() {
     backdrop.destroy();
