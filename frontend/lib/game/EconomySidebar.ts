@@ -1,4 +1,5 @@
-import * as Phaser from "phaser";
+// Economy sidebar UI logic (Phaser DOM overlay)
+import * as Phaser from "phaser"; // HUD economy sidebar
 import { gameConfig } from "@/data/gameConfig";
 import type { InstalledSystem } from "./types";
 
@@ -17,7 +18,9 @@ export class EconomySidebar {
     const html = `<div style="position:absolute; transform:translate(0%, -50%); color:#fbbf24; font-family:monospace; font-size:12px; font-weight:700; text-shadow:0 1px 0 rgba(0,0,0,.6); pointer-events:none; z-index:999999;">${text}</div>`;
     const el = this.scene.add.dom(x, y).createFromHTML(html).setOrigin(0, 0).setDepth(9999).setScrollFactor(0);
     // Make sure wrapper is on top in the DOM stacking context as well
-    try { (el.node as HTMLElement).style.zIndex = "999999"; } catch { /* no-op */ }
+    try {
+      (el.node as HTMLElement).style.zIndex = "999999";
+    } catch { /* no-op */ }
     // Tween DOM element: rise a bit and fade
     this.scene.tweens.add({
       targets: el,
@@ -25,7 +28,11 @@ export class EconomySidebar {
       alpha: 0,
       duration: 1500,
       ease: "Sine.easeOut",
-      onComplete: () => { try { el.destroy(); } catch { /* no-op */ } }
+      onComplete: () => {
+        try {
+          el.destroy();
+        } catch { /* no-op */ }
+      }
     });
   }
 
@@ -68,16 +75,15 @@ export class EconomySidebar {
       const impPerSec = s.planetImpact / tickSec;
       const isDamage = impPerSec > 0;
       const color = isDamage ? "#ef4444" : "#22c55e";
-      const impLabel = isDamage
-        ? `Damage ${impPerSec.toFixed(1)}/s`
-        : `Heal ${Math.abs(impPerSec).toFixed(1)}/s`;
+      const nameStr = String(s.key);
+      const label = nameStr.charAt(0).toUpperCase() + nameStr.slice(1);
+      const impLabel = isDamage ? `Damage ${impPerSec.toFixed(1)}/s` : `Heal ${Math.abs(impPerSec).toFixed(1)}/s`;
       return `<div style="display:flex;justify-content:space-between;gap:8px;margin:6px 0;">
-        <span style="opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-        ${String(s.key).charAt(0).toUpperCase() + String(s.key).slice(1)}</span>
-            <span style="display:flex;gap:8px;">
+        <span style="opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</span>
+        <span style="display:flex;gap:8px;">
           <span style="color:#fbbf24;">🪙 +${incPerSec.toFixed(1)}/s</span>
           <span style="color:${color};">🔥 ${impLabel}</span>
-            </span>
+        </span>
       </div>`;
     });
     const incomePerTick = installed.reduce((a, s) => a + s.resourceIncome, 0);
@@ -85,13 +91,15 @@ export class EconomySidebar {
     const income = incomePerTick / tickSec;
     const impact = impactPerTick / tickSec;
     const planetDeltaPerSec = (gameConfig.baseDecay + impactPerTick) / tickSec; // >0 damage per second, <0 heal per second
+    const totalImpLabel = impact > 0 ? `Damage ${impact.toFixed(1)}/s` : `Heal ${Math.abs(impact).toFixed(1)}/s`;
+    const totalImpColor = impact > 0 ? "#ef4444" : "#22c55e";
     content.innerHTML = `
       ${rows.join("")}
       <div style="margin-top:8px;border-top:1px solid #1f2937;padding-top:8px;display:flex;justify-content:space-between;">
-    <b>Total</b>
+        <b>Total</b>
         <span>
-      <span style="color:#fbbf24;margin-right:10px;">🪙 +${income.toFixed(1)}/s</span>
-      <span style="color:${impact > 0 ? "#ef4444" : "#22c55e"};">🔥 ${impact > 0 ? `Damage ${impact.toFixed(1)}/s` : `Heal ${Math.abs(impact).toFixed(1)}/s`}</span>
+          <span style="color:#fbbf24;margin-right:10px;">🪙 +${income.toFixed(1)}/s</span>
+          <span style="color:${totalImpColor};">🔥 ${totalImpLabel}</span>
         </span>
       </div>`;
     const root = this.sidebarDom.node as HTMLElement;
@@ -117,6 +125,7 @@ export class EconomySidebar {
       const now = this.scene.time.now;
       if (now - this.lastIncomeFloatAt >= Math.max(800, gameConfig.tickDurationMs * 0.8)) {
         const dom = this.sidebarDom;
+        // ensure Phaser DOM element is still alive
         if (dom && !(dom as any).destroyed) {
           const root = dom.node as HTMLElement | null;
           if (root) {

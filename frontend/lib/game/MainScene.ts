@@ -16,41 +16,17 @@ import { showGameOverScreen } from "./ui/menus/gameOverScreen";
 import { addGoodIcon as addGoodIconUtil, promptSell as promptSellUtil } from "./ui/systems/goodSystems";
 import { promptReplacement as promptReplacementUtil } from "./ui/systems/badSystems";
 import { PopulationVisuals } from "./population/PopulationVisuals";
+import { PlanetManager } from "./planet/PlanetManager";
+import { computeScore } from "./score";
 export default class MainScene extends Phaser.Scene {
   private state!: GameState;
-  private planetBase!: Phaser.GameObjects.Image;
-  // Overlay animation now uses two layers for smooth cross-fade
-  private planetOverlayA!: Phaser.GameObjects.Image; // first overlay layer
-  private planetOverlayB!: Phaser.GameObjects.Image; // second overlay layer
-  private planetOverlayActive!: Phaser.GameObjects.Image; // pointer to currently visible layer
-  private planetOverlayFrame: number = 0; // current frame index (0..27)
-  private planetOverlayTimer?: Phaser.Time.TimerEvent; // frame update timer
-  // Base overlay opacity (will be dynamically scaled by planet health)
-  private planetOverlayOpacity: number = 0.15; // min opacity at full health
-  private planetOverlayOpacityMax: number = 0.85; // max opacity at 0 health (more visible damage)
-  private planetOverlayCurrentOpacity: number = 0.15; // cached current target computed from health
-  private planetOverlayFadeMs: number = 3000; // very slow fade duration for smooth overlap
-  private planetOverlayFrameIntervalMs: number = 2200; // start next frame before previous fade finishes (overlap)
-  private planetClouds?: Phaser.GameObjects.Image; // faint secondary cloud layer
-  private planetCloudsBaseAlpha: number = 0.08; // subtle base alpha
-  private planetCloudsDamageBoostAlpha: number = 0.18; // extra alpha when planet heavily damaged
-  // Breathing configuration (drift disabled per user preference)
-  // Breathing fully disabled (kept fields commented for quick restore)
-  // private driftTime: number = 0;
-  // private breatheAmp: number = 0.03;
-  // private breatheSpeed: number = 0.06;
-  private planetCloudsBaseScale: number = 1; // captured base scale for clouds
-  private perlinPerm: number[] = []; // retained (noise disabled for position)
-  private planetDom: Phaser.GameObjects.DOMElement | null = null; // deprecated (kept for fallback)
+  // Planet rendering handled by PlanetManager
+  private planet?: PlanetManager;
   private planetSizePx: number = 260;
-  // Base planet center for sprite (used to stabilize frame-based offsets)
-  private planetBaseX: number = 0;
-  private planetBaseY: number = 0;
-  // Per-frame Y offsets (tweakable to remove vertical jitter). 8 frames -> initialize zeros.
-  private planetFrameYOffsets: number[] = [0, 0, 0, 0, 0, 0, 0, 0];
-  // Removed direct HUD/Sidebar fields; handled by modules
+  // UI modules
   private hud!: HudOverlay;
   private sidebar!: EconomySidebar;
+  // Legacy fields removed
   private statsSidebar!: StatsSidebar;
   private overlayObjects: Phaser.GameObjects.GameObject[] = [];
   private overlayDom: Phaser.GameObjects.DOMElement[] = [];
@@ -76,15 +52,11 @@ export default class MainScene extends Phaser.Scene {
   constructor() {
     super("MainScene");
     // (Noise table creation left intact if future subtle drift needed)
-    const p: number[] = Array.from({ length: 256 }, (_, i) => i);
-    for (let i = 255; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));[p[i], p[j]] = [p[j], p[i]];
-    }
-    this.perlinPerm = p.concat(p);
+    // constructor intentionally minimal
   }
 
   preload() {
-    this.load.svg("planet", "/game/planet.svg", { width: 256, height: 256 });    
+    this.load.svg("planet", "/game/planet.svg", { width: 256, height: 256 });
     this.load.image("oil", "/game/oil.png");
     this.load.image("coal", "/game/coal.png");
     this.load.image("logging", "/game/logging.png");
@@ -137,7 +109,9 @@ export default class MainScene extends Phaser.Scene {
       }
       this.populationVisuals = undefined;
       if (this.bgm) {
-        try { this.bgm.stop(); } catch { /* ignore */ }
+        try {
+          this.bgm.stop();
+        } catch { /* ignore */ }
         this.bgm.destroy();
         this.bgm = undefined;
       }
@@ -149,7 +123,9 @@ export default class MainScene extends Phaser.Scene {
     const centerY = this.cameras.main.height / 2;
 
     // Build planet (now only rotating base image)
-    this.createLayeredPlanet(centerX, centerY);
+    // Build planet via manager
+    if (!this.planet) this.planet = new PlanetManager(this, () => Math.max(0, Math.min(1, this.state.planetHealth / gameConfig.planet.max)));
+    this.planet.init(centerX, centerY);
     // Floating industry icons removed; interaction now through bottom toolbar buttons with tooltips.
 
     // HUD (create first so sidebars can safely reference headerHeight)
@@ -201,7 +177,9 @@ export default class MainScene extends Phaser.Scene {
           }
         }
         // Persist to localStorage (1 = muted, 0 = unmuted)
-        try { window?.localStorage?.setItem("sap_audio_muted", on ? "0" : "1"); } catch { /* ignore */ }
+        try {
+          window?.localStorage?.setItem("sap_audio_muted", on ? "0" : "1");
+        } catch { /* ignore */ }
       });
       // Reflect initial label: prefer persisted value; else derive from bgm
       let desiredOn: boolean | null = null;
@@ -212,7 +190,7 @@ export default class MainScene extends Phaser.Scene {
       } catch { /* ignore */ }
       if (desiredOn === null) {
         const bgmAny: any = this.bgm as any;
-        const isMuted = bgmAny ? (typeof bgmAny.mute === 'boolean' ? bgmAny.mute : (bgmAny.volume === 0)) : true;
+        const isMuted = bgmAny ? (typeof bgmAny.mute === "boolean" ? bgmAny.mute : (bgmAny.volume === 0)) : true;
         desiredOn = !isMuted;
       }
       if ((this.hud as any).setMusicOn && desiredOn !== null) {
@@ -443,7 +421,6 @@ export default class MainScene extends Phaser.Scene {
     }
 
     this.updateHud();
-    this.applyPlanetHealthVisuals();
     this.updateSidebar();
 
     // Update left stats sidebar
@@ -491,10 +468,7 @@ export default class MainScene extends Phaser.Scene {
     // Fade out everything except the planet (and its overlays) before showing screen
     const fadeDuration = 800;
     const keep: Set<Phaser.GameObjects.GameObject> = new Set();
-    if (this.planetBase) keep.add(this.planetBase);
-    if (this.planetOverlayA) keep.add(this.planetOverlayA);
-    if (this.planetOverlayB) keep.add(this.planetOverlayB);
-    if (this.planetClouds) keep.add(this.planetClouds);
+    if (this.planet) this.planet.getKeepObjects().forEach(o => keep.add(o));
 
     this.children.each(obj => {
       if (keep.has(obj)) return;
@@ -540,8 +514,11 @@ export default class MainScene extends Phaser.Scene {
     const totalImpactPerTick = installed.reduce((s, i) => s + i.planetImpact, 0);
     const planetDeltaPerSec = (gameConfig.baseDecay + totalImpactPerTick) / tickSec; // >0 damage per second
     const planetDeltaLabel = `Damage ${planetDeltaPerSec.toFixed(1)}/s`;
-    const seconds = this.state.tick * tickSec;
-    const score = Math.floor((seconds / 10) * 1 + planetHealth / 100 + populationHealth);
+    const score = computeScore({
+      tick: this.state.tick,
+      tickDurationMs: gameConfig.tickDurationMs,
+      populationHealth
+    });
 
     // Ensure HUD exists and is properly initialized
     if (!this.hud) {
@@ -591,7 +568,9 @@ export default class MainScene extends Phaser.Scene {
     if (!this.bgm) {
       if (!this.sound.get("bgm_main")) {
         // If asset somehow not loaded, attempt dynamic load (Phaser supports late load)
-        try { this.load.audio("bgm_main", ["/music/Underneath%20Skies.mp3"]); this.load.start(); } catch { /* ignore */ }
+        try {
+          this.load.audio("bgm_main", ["/music/Underneath%20Skies.mp3"]); this.load.start();
+        } catch { /* ignore */ }
       }
       // Determine initial mute state from localStorage (default Off)
       let startMuted = true;
@@ -603,7 +582,7 @@ export default class MainScene extends Phaser.Scene {
       this.bgm = this.sound.add("bgm_main", { loop: true, volume: 0.4, mute: startMuted as any });
       this.bgm.play();
       const anySound: any = this.bgm as any;
-      if (typeof anySound.setMute === 'function') {
+      if (typeof anySound.setMute === "function") {
         anySound.setMute(startMuted);
       } else {
         anySound.__prevVol = anySound.volume ?? 0.4;
@@ -700,22 +679,10 @@ export default class MainScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
-    // Recompute desired planet size (applies to sprite version too)
-    // Enlarge baseline planet size (increase scale factor & max clamp)
-    const size = Math.floor(Math.min(width, height) * 0.50);
-    this.planetSizePx = Math.max(240, Math.min(640, size));
-    if (this.planetBase) {
-      this.planetBaseX = cx;
-      this.planetBaseY = cy;
-      this.planetBase.setScale(this.planetSizePx / 1280).setPosition(cx, cy);
-    }
-    // Resize both overlay layers if present
-    if (this.planetOverlayA) this.planetOverlayA.setScale(this.planetSizePx / 1024).setPosition(cx, cy);
-    if (this.planetOverlayB) this.planetOverlayB.setScale(this.planetSizePx / 1024).setPosition(cx, cy);
-    if (this.planetClouds) {
-      this.planetCloudsBaseScale = this.planetSizePx / 1280;
-      this.planetClouds.setScale(this.planetCloudsBaseScale).setPosition(cx, cy);
-    }
+    // Recompute desired planet size handled by PlanetManager
+    // Resize planet via manager
+    if (this.planet) this.planet.onResize(width, height);
+    this.planetSizePx = this.planet ? this.planet.getSizePx() : this.planetSizePx;
 
     // Resize stars backdrop
     if (this.starsBackdropDom) {
@@ -726,9 +693,7 @@ export default class MainScene extends Phaser.Scene {
     }
 
     // Recenter planet
-    if (this.planetDom) {
-      this.resizePlanetDom(cx, cy);
-    }
+    // Recenter planet (handled by PlanetManager)
 
     // Reposition industry icons around planet
     const dynamicRadius = Math.round(this.planetSizePx / 2) + 50; // keep same offset around resized planet
@@ -773,7 +738,6 @@ export default class MainScene extends Phaser.Scene {
     if (this.hud) this.updateHud();
     // Keep crowd info positioned on resize
     if (this.hud && (this.hud as any).updateCrowdInfo) {
-      const tickSec = gameConfig.tickDurationMs / 1000;
       const incomePerSec = this.state.installed.reduce((sum, s) => sum + s.resourceIncome, 0);
       const requiredPerSec = (this.state.populationHealth * gameConfig.minIncomePerPopPer10s) / 10;
       const secondsUntilUpkeep = Math.max(0, this.state.lastConsumptionTick + 10 - this.state.tick);
@@ -816,131 +780,13 @@ export default class MainScene extends Phaser.Scene {
     }
   }
 
-  private resizePlanetDom(cx: number, cy: number) {
-    if (!this.planetDom) return;
-    const cam = this.cameras.main;
-    const size = Math.floor(Math.min(cam.width, cam.height) * 0.42);
-    this.planetSizePx = Math.max(220, Math.min(520, size));
-    this.planetDom.setPosition(cx - this.planetSizePx / 2, cy - this.planetSizePx / 2);
-    const node = this.planetDom.node as HTMLElement;
-    const root = node.querySelector("[data-planet-root]") as HTMLElement | null;
-    if (root) {
-      root.style.width = `${this.planetSizePx}px`;
-      root.style.height = `${this.planetSizePx}px`;
-    }
-  }
+  // resizePlanetDom removed; PlanetManager handles sizing
 
   private applyPlanetHealthVisuals() {
-    const health = Math.max(0, Math.min(1, this.state.planetHealth / gameConfig.planet.max));
-    // Map health -> overlay opacity (invert: low health => higher opacity)
-    this.planetOverlayCurrentOpacity = this.planetOverlayOpacity + (1 - health) * (this.planetOverlayOpacityMax - this.planetOverlayOpacity);
-    if (this.planetBase) {
-      // Slight brightness shift of base image
-      const baseBrightness = 0.75 + (0.25 * health);
-      this.planetBase.setTint(Phaser.Display.Color.GetColor(255 * baseBrightness, 255 * baseBrightness, 255 * baseBrightness));
-    }
-    // Clouds alpha (base + damage boost)
-    if (this.planetClouds) {
-      const damageFactor = (1 - health); // 0 healthy -> 1 critical
-      const targetCloudAlpha = this.planetCloudsBaseAlpha + damageFactor * (this.planetCloudsDamageBoostAlpha - this.planetCloudsBaseAlpha);
-      this.planetClouds.setAlpha(targetCloudAlpha);
-    }
-    // Apply tinting to overlay layers if they exist
-    const overlays: Phaser.GameObjects.Image[] = [];
-    if (this.planetOverlayA) overlays.push(this.planetOverlayA);
-    if (this.planetOverlayB) overlays.push(this.planetOverlayB);
-    if (overlays.length) {
-      let overlayTint: number;
-      if (health > 0.66) overlayTint = 0xffffff;
-      else if (health > 0.33) overlayTint = 0xffc241;
-      else overlayTint = 0xff4d4d;
-      overlays.forEach(o => o.setTint(overlayTint));
-      // Ensure overlays reflect computed opacity (do not instantly override fades mid-transition; set on active layer only)
-      if (this.planetOverlayActive) this.planetOverlayActive.setAlpha(this.planetOverlayCurrentOpacity);
-      // Low health pulse only on the active overlay (avoid fighting fade tweens); pulse around current opacity
-      if (health < 0.33 && this.planetOverlayActive) {
-        // If there is no existing non-alpha tween changing its alpha range (we kill alpha pulses when fading)
-        const activeTweens = this.tweens.getTweensOf(this.planetOverlayActive);
-        const hasPulse = activeTweens.some(tw => (tw as any).data?.some?.((d: any) => d.key === "alpha" && d.duration === 1400));
-        if (!hasPulse) {
-          this.tweens.add({
-            targets: this.planetOverlayActive,
-            alpha: { from: this.planetOverlayCurrentOpacity * 0.75, to: Math.min(this.planetOverlayCurrentOpacity * 1.15, this.planetOverlayOpacityMax) },
-            duration: 1400,
-            yoyo: true,
-            repeat: -1,
-            ease: "Sine.easeInOut"
-          });
-        }
-      }
-    }
+    if (this.planet) this.planet.applyHealthVisuals();
   }
 
-  // New layered planet: base + animated overlay
-  private createLayeredPlanet(centerX: number, centerY: number) {
-    // Remove old sprites if present
-    if (this.planetBase) this.planetBase.destroy();
-    if (this.planetOverlayA) this.planetOverlayA.destroy();
-    if (this.planetOverlayB) this.planetOverlayB.destroy();
-    if (this.planetClouds) {
-      this.planetClouds.destroy(); this.planetClouds = undefined;
-    }
-    if (this.planetOverlayTimer) {
-      this.planetOverlayTimer.remove(false); this.planetOverlayTimer = undefined;
-    }
-    // Add base planet
-    this.planetBase = this.add.image(centerX, centerY, "planet_base_hd").setDepth(2).setOrigin(0.5);
-    this.planetBase.setScale(this.planetSizePx / 1280);
-    // Add faint cloud layer
-    this.planetClouds = this.add.image(centerX, centerY, "planet_base_hd").setDepth(2.5).setOrigin(0.5);
-    this.planetCloudsBaseScale = this.planetSizePx / 1280;
-    this.planetClouds.setScale(this.planetCloudsBaseScale).setAlpha(this.planetCloudsBaseAlpha).setBlendMode(Phaser.BlendModes.ADD);
-    // Initialize overlay frames
-    this.planetOverlayFrame = 0;
-    this.applyPlanetHealthVisuals(); // sets planetOverlayCurrentOpacity
-    this.planetOverlayA = this.add.image(centerX, centerY, "planet_noise_00").setDepth(3).setOrigin(0.5);
-    this.planetOverlayA.setScale(this.planetSizePx / 1024).setAlpha(this.planetOverlayCurrentOpacity);
-    this.planetOverlayB = this.add.image(centerX, centerY, "planet_noise_01").setDepth(3).setOrigin(0.5);
-    this.planetOverlayB.setScale(this.planetSizePx / 1024).setAlpha(0);
-    this.planetOverlayActive = this.planetOverlayA;
-    this.startPlanetOverlayAnim(centerX, centerY);
-
-  }
-
-  private startPlanetOverlayAnim(centerX: number, centerY: number) {
-    if (this.planetOverlayTimer) this.planetOverlayTimer.remove(false);
-    this.planetOverlayTimer = this.time.addEvent({
-      delay: this.planetOverlayFrameIntervalMs,
-      loop: true,
-      callback: () => {
-        // Advance frame index
-        this.planetOverlayFrame = (this.planetOverlayFrame + 1) % 28;
-        const n = this.planetOverlayFrame.toString().padStart(2, "0");
-        const outgoing = this.planetOverlayActive;
-        const incoming = (outgoing === this.planetOverlayA) ? this.planetOverlayB : this.planetOverlayA;
-        // Stop active tweens on both layers to avoid stacking pulses & previous fades
-        this.tweens.killTweensOf(incoming);
-        this.tweens.killTweensOf(outgoing);
-        // Set incoming frame data
-        incoming
-          .setTexture(`planet_noise_${n}`)
-          .setPosition(centerX, centerY)
-          .setScale(this.planetSizePx / 1024)
-          .setAlpha(0)
-          .setDepth(3);
-        // Apply tint before starting fade (so it matches health instantly)
-        this.applyPlanetHealthVisuals();
-        // Cross-fade with long overlap
-        const fadeDur = this.planetOverlayFadeMs;
-        // Recompute opacity in case health changed since last frame
-        this.applyPlanetHealthVisuals();
-        const targetAlpha = this.planetOverlayCurrentOpacity;
-        this.tweens.add({ targets: incoming, alpha: targetAlpha, duration: fadeDur, ease: "Sine.easeInOut" });
-        this.tweens.add({ targets: outgoing, alpha: 0, duration: fadeDur, ease: "Sine.easeInOut" });
-        this.planetOverlayActive = incoming;
-      }
-    });
-  }
+  // Old planet overlay animation removed; handled by PlanetManager
 
   // ---------- Per-frame update (drift removed, only breathing) ----------
   update() {

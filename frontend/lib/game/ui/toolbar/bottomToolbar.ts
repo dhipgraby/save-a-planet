@@ -2,6 +2,10 @@ import * as Phaser from "phaser";
 import { gameConfig } from "@/data/gameConfig";
 import type { GoodSystemKey, BadSystemKey } from "../../types";
 import { spawnFloatingText } from "../effects/floatingText";
+import React from "react";
+import { createRoot, Root } from "react-dom/client";
+import BuildGoodSystemModal from "@/components/game/BuildGoodSystemModal";
+import ConfirmModal from "@/components/game/ConfirmModal";
 
 export interface BottomToolbarHost {
   scene: Phaser.Scene;
@@ -98,11 +102,7 @@ export function updateBottomToolbar(host: BottomToolbarHost, existingDom: Phaser
         return;
       }
       if (btn.hasAttribute("data-surrender")) {
-        // Mark game over and trigger a restart flow: set state then show game over screen via scene method if present
-        (host.state as any).gameOver = true;
-        // Expect MainScene to expose showGameOver()
-        const sceneAny: any = host.scene as any;
-        if (typeof sceneAny.showGameOver === "function") sceneAny.showGameOver();
+        showSurrenderConfirm(host);
         return;
       }
       const sys = btn.getAttribute("data-sys");
@@ -158,10 +158,7 @@ export function updateBottomToolbar(host: BottomToolbarHost, existingDom: Phaser
           showGlobalBuildPanel(host); return;
         }
         if (btn.hasAttribute("data-surrender")) {
-          (host.state as any).gameOver = true;
-          const sceneAny: any = host.scene as any;
-          if (typeof sceneAny.showGameOver === "function") sceneAny.showGameOver();
-          return;
+          showSurrenderConfirm(host); return;
         }
         const sys = btn.getAttribute("data-sys");
         const type = btn.getAttribute("data-type");
@@ -211,73 +208,150 @@ export function showGlobalBuildPanel(host: BottomToolbarHost) {
   host.closeBottomPanel();
   const cam = host.scene.cameras.main;
   const width = cam.width;
+  const height = cam.height;
   const panelWidth = Math.min(860, width - 24);
-  const panelMaxHeight = Math.max(220, Math.floor(cam.height * 0.5));
+  const panelMaxHeight = Math.max(220, Math.floor(height * 0.5));
   const x = (width - panelWidth) / 2;
-  const goods = Object.values(gameConfig.goodSystems);
-  const tickSec = gameConfig.tickDurationMs / 1000;
-  const cards = goods.map(g => `
-    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;display:flex;gap:12px;align-items:center;">
-      <div style="width:42px;height:42px;flex:0 0 42px;display:flex;align-items:center;justify-content:center;background:#0f172a;border-radius:8px;border:1px solid #1f2937;">⚙️</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;">${g.name}</div>
-        <div style="opacity:.85;font-size:12px;margin:4px 0 6px;">${g.blurb}</div>
-        <div style="display:flex;gap:12px;font-size:12px;opacity:.9;flex-wrap:wrap;">
-          <span>Build: ${g.buildCost}</span>
-          <span>Pop req: ${g.populationRequired}</span>
-          <span>Income: +${(g.resourceIncome / tickSec).toFixed(1)}/s</span>
-          <span>Damage: ${(g.planetImpact / tickSec).toFixed(1)}/s</span>
-        </div>
-      </div>
-      <button data-build="${g.key}" style="padding:8px 10px;background:#10b981;color:#0b1220;border:none;border-radius:8px;font-weight:700;">Build</button>
-    </div>`).join("");
-  const html = `
-    <style>@keyframes sap-pop {0%{transform:scale(.88);opacity:0;}60%{transform:scale(1.04);opacity:1;}100%{transform:scale(1);}}</style>
-    <div style="width:${panelWidth}px;max-height:${panelMaxHeight}px;overflow:auto;background:#0b1220ee;border:1px solid #1f2937;border-radius:12px;color:#e5e7eb;padding:14px;backdrop-filter:blur(4px);box-shadow:0 10px 30px rgba(0,0,0,.45);will-change:transform,opacity;animation:sap-pop 420ms cubic-bezier(0.34,1.56,0.64,1) both;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-weight:800;font-size:18px;">Build a Good System</div>
-        <button data-close style="background:#1f2937;color:#e5e7eb;border:none;border-radius:8px;padding:6px 10px;">Close</button>
-      </div>
-      <div data-build-list style="display:grid;grid-template-columns:1fr;gap:10px;">${cards}</div>
-    </div>`;
-  const dom = host.scene.add.dom(x, 0).createFromHTML(html).setOrigin(0, 0).setDepth(25);
-  // center vertically
-  const root = dom.node as HTMLElement;
-  const actualH = Math.min(panelMaxHeight, root.getBoundingClientRect().height || panelMaxHeight);
-  const centeredY = Math.max(8, Math.floor((cam.height - actualH) / 2));
-  dom.setPosition(x, centeredY);
-  host.setBottomPanelCentered(true);
-  dom.addListener("click");
-  dom.on("click", (ev: any) => {
-    const t = ev.target as HTMLElement; if (!t) return;
-    if (t.hasAttribute("data-close")) {
-      host.closeBottomPanel(); return;
+
+  // Prepare goods list for React component
+  const goodsArr = Object.values(gameConfig.goodSystems) as any[];
+  const iconSrc = (key: string) => {
+    const map: Record<string, string> = { sustainableFarm: "farm" };
+    return `/game/${map[key] ?? key}.png`;
+  };
+  const goods = goodsArr.map(g => ({
+    key: g.key,
+    name: g.name,
+    blurb: g.blurb,
+    buildCost: g.buildCost,
+    populationRequired: g.populationRequired,
+    resourceIncome: g.resourceIncome,
+    planetImpact: g.planetImpact,
+    iconSrc: iconSrc(g.key),
+    pros: (g.pros ?? []).slice(0, 2),
+    cons: (g.cons ?? []).slice(0, 1)
+  }));
+
+  const container = document.createElement("div");
+  container.style.width = `${panelWidth}px`;
+  container.style.maxHeight = `${panelMaxHeight}px`;
+  container.style.overflow = "auto";
+  const root: Root = createRoot(container);
+  const dom = host.scene.add.dom(x, 0, container).setOrigin(0, 0).setDepth(25);
+
+  const onClose = () => {
+    try {
+      root.unmount();
+    } catch { /* noop */ }
+    host.closeBottomPanel();
+  };
+  const onBuild = (goodKey: string) => {
+    const good = (gameConfig.goodSystems as any)[goodKey];
+    if (host.state.populationHealth < good.populationRequired) {
+      spawnFloatingText(host.scene, `Requires population ≥ ${good.populationRequired}`, { color: "#fbbf24", y: host.headerHeight() + 8 });
+      return;
     }
-    if (t.hasAttribute("data-build")) {
-      const goodKey = t.getAttribute("data-build") as GoodSystemKey;
-      const good = (gameConfig.goodSystems as any)[goodKey];
-      if (host.state.populationHealth < good.populationRequired) {
-        spawnFloatingText(host.scene, `Requires population ≥ ${good.populationRequired}`, { color: "#fbbf24", y: host.headerHeight() + 8 });
-        return;
-      }
-      if (host.state.resources < good.buildCost) {
-        spawnFloatingText(host.scene, "Not enough resources", { color: "#f87171", y: host.headerHeight() + 8 });
-        return;
-      }
-      host.state.resources -= good.buildCost;
-      host.state.installed.push({
-        key: good.key,
-        type: "good",
-        resourceIncome: good.resourceIncome,
-        planetImpact: good.planetImpact,
-        spriteKey: good.key
-      });
-      host.addGoodIcon(goodKey);
-      spawnFloatingText(host.scene, `${good.name} built`, { color: "#93c5fd", y: host.headerHeight() + 8 });
-      host.updateHud();
-      host.updateSidebar();
-      updateBottomToolbar(host, host.bottomPanelDom);
+    if (host.state.resources < good.buildCost) {
+      spawnFloatingText(host.scene, "Not enough resources", { color: "#f87171", y: host.headerHeight() + 8 });
+      return;
     }
+    host.state.resources -= good.buildCost;
+    host.state.installed.push({
+      key: good.key,
+      type: "good",
+      resourceIncome: good.resourceIncome,
+      planetImpact: good.planetImpact,
+      spriteKey: good.key
+    });
+    host.addGoodIcon(goodKey as GoodSystemKey);
+    spawnFloatingText(host.scene, `${good.name} built`, { color: "#93c5fd", y: host.headerHeight() + 8 });
+    host.updateHud();
+    host.updateSidebar();
+    updateBottomToolbar(host, host.bottomPanelDom);
+    onClose();
+  };
+
+  root.render(
+    React.createElement(BuildGoodSystemModal, {
+      title: "Build a Good System",
+      goods,
+      onClose,
+      onBuild
+    })
+  );
+
+  // Center vertically after mounting
+  requestAnimationFrame(() => {
+    const rootEl = dom.node as HTMLElement | null;
+    const actualH = Math.min(panelMaxHeight, rootEl ? (rootEl.getBoundingClientRect().height || panelMaxHeight) : panelMaxHeight);
+    const centeredY = Math.max(8, Math.floor((cam.height - actualH) / 2));
+    dom.setPosition(x, centeredY);
+    host.setBottomPanelCentered(true);
   });
+
+  dom.on("destroy", () => {
+    try {
+      root.unmount();
+    } catch { /* noop */ }
+  });
+  host.setBottomPanelDom(dom);
+}
+
+export function showSurrenderConfirm(host: BottomToolbarHost) {
+  host.closeBottomPanel();
+  const cam = host.scene.cameras.main;
+  const width = cam.width;
+  const height = cam.height;
+  const panelWidth = Math.min(560, width - 24);
+  const x = (width - panelWidth) / 2;
+
+  const container = document.createElement("div");
+  container.style.width = `${panelWidth}px`;
+  const root: Root = createRoot(container);
+  const dom = host.scene.add.dom(x, 0, container).setOrigin(0, 0).setDepth(27);
+
+  const cleanup = () => {
+    try {
+      root.unmount();
+    } catch { /* noop */ }
+    host.closeBottomPanel();
+  };
+
+  const onConfirm = () => {
+    // Mark game over and trigger game over UI via scene
+    (host.state as any).gameOver = true;
+    const sceneAny: any = host.scene as any;
+    if (typeof sceneAny.showGameOver === "function") sceneAny.showGameOver();
+    cleanup();
+  };
+
+  const onCancel = () => cleanup();
+
+  root.render(
+    React.createElement(ConfirmModal, {
+      title: "Surrender?",
+      description: "This will end your current run and show the Game Over screen.",
+      confirmLabel: "Yes, surrender",
+      cancelLabel: "Keep playing",
+      onConfirm,
+      onCancel
+    })
+  );
+
+  // Center vertically after mounting
+  requestAnimationFrame(() => {
+    const rootEl = dom.node as HTMLElement | null;
+    const actualH = rootEl ? (rootEl.getBoundingClientRect().height || 0) : 0;
+    const centeredY = Math.max(8, Math.floor((height - Math.min(actualH, height - 16)) / 2));
+    dom.setPosition(x, centeredY);
+    host.setBottomPanelCentered(true);
+  });
+
+  dom.on("destroy", () => {
+    try {
+      root.unmount();
+    } catch { /* noop */ }
+  });
+
   host.setBottomPanelDom(dom);
 }

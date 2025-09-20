@@ -1,5 +1,4 @@
 import * as Phaser from "phaser";
-import { gameConfig } from "@/data/gameConfig";
 
 export class HudOverlay {
   private scene: Phaser.Scene;
@@ -399,16 +398,16 @@ export class HudOverlay {
     if (this.healBtnBg) this.healBtnBg.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_BG).setScrollFactor(0);
     if (this.healBtnText) this.healBtnText.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_TEXT).setScrollFactor(0);
 
-  // Ensure music button is visible
-  if (this.musicBtnBg) this.musicBtnBg.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_BG).setScrollFactor(0);
-  if (this.musicBtnText) this.musicBtnText.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_TEXT).setScrollFactor(0);
+    // Ensure music button is visible
+    if (this.musicBtnBg) this.musicBtnBg.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_BG).setScrollFactor(0);
+    if (this.musicBtnText) this.musicBtnText.setVisible(true).setDepth(HudOverlay.DEPTH_HEAL_TEXT).setScrollFactor(0);
 
     // Redraw header to ensure it's properly sized
     const cam = this.scene.cameras.main;
     this.redrawHeader(cam.width);
     // Bring to top explicitly (in case other systems added later at high depth)
-  const bring = (obj?: Phaser.GameObjects.GameObject) => obj && this.scene.children.bringToTop(obj);
-  const objs = [this.topBar, this.topBarTitle, this.topBarLegend, this.scoreBoxBg, this.scoreBoxText, this.planetBarBg, this.populationBarBg, this.planetBarFill, this.populationBarFill, this.planetLabel, this.populationLabel, this.hudText, this.healBtnBg, this.healBtnText, this.musicBtnBg, this.musicBtnText];
+    const bring = (obj?: Phaser.GameObjects.GameObject) => obj && this.scene.children.bringToTop(obj);
+    const objs = [this.topBar, this.topBarTitle, this.topBarLegend, this.scoreBoxBg, this.scoreBoxText, this.planetBarBg, this.populationBarBg, this.planetBarFill, this.populationBarFill, this.planetLabel, this.populationLabel, this.hudText, this.healBtnBg, this.healBtnText, this.musicBtnBg, this.musicBtnText];
     objs.forEach(bring);
     if (HudOverlay.DEBUG) {
       // Log depth & visibility once per forceVisibility call
@@ -541,40 +540,57 @@ export class HudOverlay {
     if (this.minimal) return;
     // Ensure elements exist
     if (!this.crowdInfoBg) this.crowdInfoBg = this.scene.add.graphics({ x: 0, y: 0 }).setDepth(HudOverlay.DEPTH_LABEL + 2).setScrollFactor(0);
-  if (!this.crowdInfoText1) this.crowdInfoText1 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "12px", color: "#e5e7eb" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
-  if (!this.crowdInfoText2) this.crowdInfoText2 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "12px", color: "#e5e7eb" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
-  if (!this.crowdInfoText3) this.crowdInfoText3 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "11px", color: "#cbd5e1" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
+    if (!this.crowdInfoText1) this.crowdInfoText1 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "12px", color: "#e5e7eb" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
+    if (!this.crowdInfoText2) this.crowdInfoText2 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "12px", color: "#e5e7eb" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
+    if (!this.crowdInfoText3) this.crowdInfoText3 = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "11px", color: "#cbd5e1" }).setDepth(HudOverlay.DEPTH_LABEL + 3).setScrollFactor(0);
     if (!this.crowdInfoDot) this.crowdInfoDot = this.scene.add.graphics({ x: 0, y: 0 }).setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0);
-  if (!this.crowdInfoLegend) this.crowdInfoLegend = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "11px", color: "#cbd5e1" }).setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0);
-  if (!this.crowdInfoCoin) this.crowdInfoCoin = this.scene.add.image(0, 0, "coin").setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0).setScale(0.8).setOrigin(0, 0.5).setTint(0xfbbf24);
-    
-  // Line 1: concise requirement summary (only per-second shown)
-  this.crowdInfoText1.setText(`👫 Resources need for ${opts.peopleCount} — (${opts.requiredPerSec.toFixed(0)}/s)`);
-  // Line 2: actual deduction amount per 10s with coin icon
-  this.crowdInfoText2.setText(`Consumes 10s: -${Math.floor(opts.popCostPer10s)}`);
-  // Line 3: timer to next deduction
-  this.crowdInfoText3.setText(`Next: ${Math.max(0, Math.floor(opts.secondsUntilUpkeep))}s`);
+    if (!this.crowdInfoLegend) this.crowdInfoLegend = this.scene.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "11px", color: "#cbd5e1" }).setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0);
+    if (!this.crowdInfoCoin) this.crowdInfoCoin = this.scene.add.image(0, 0, "coin").setDepth(HudOverlay.DEPTH_LABEL + 4).setScrollFactor(0).setScale(0.8).setOrigin(0, 0.5).setTint(0xfbbf24);
+
+    // Line 1: concise requirement summary (only per-second shown)
+    this.crowdInfoText1.setText(`👫 Resources need for ${opts.peopleCount} — (${opts.requiredPerSec.toFixed(0)})`);
+    // Line 2: actual deduction amount per 10s with coin icon
+    this.crowdInfoText2.setText(`Consumes 10s: -${Math.floor(opts.popCostPer10s)}`);
+    // Line 3: timer to next deduction
+    this.crowdInfoText3.setText(`Next: ${Math.max(0, Math.floor(opts.secondsUntilUpkeep))}s`);
 
     // Status dot + legend
-  const green = 0x10b981; // increasing
+    const green = 0x10b981; // increasing
     const grey = 0x9ca3af; // stable
-  const red = 0xef4444; // decreasing
+    const red = 0xef4444; // decreasing
     let statusColor = grey;
-  let statusLabel = "Stable";
-  const denom = Math.max(opts.requiredPerSec, 0.0001);
-  const ratio = opts.incomePerSec / denom;
-  const healMult = gameConfig.populationHealThresholdMultiplier ?? 1.2;
-  if (ratio >= healMult) { statusColor = green; statusLabel = "Increasing"; }
-  else if (ratio < 1) { statusColor = red; statusLabel = "Decreasing"; }
+    let statusLabel = "Stable";
+
+    // Prefer explicit resources if provided, otherwise fall back to incomePerSec
+    const available = (opts.resources !== undefined) ? opts.resources : opts.incomePerSec;
+    // Decide status:
+    // - If available is at least 20% more than requiredPerSec -> Increasing (green)
+    // - If available is >= requiredPerSec but less than +20% -> Stable (grey)
+    // - If available is less than requiredPerSec -> Decreasing (red)
+    if (available >= opts.requiredPerSec * 1.2) {
+      statusColor = green;
+      statusLabel = "Increasing";
+    } else if (available >= opts.requiredPerSec) {
+      statusColor = grey;
+      statusLabel = "Stable";
+    } else {
+      statusColor = red;
+      statusLabel = "Decreasing";
+    }
+
     this.crowdInfoDot.clear().fillStyle(statusColor, 1).fillCircle(0, 0, 5).lineStyle(1, 0x1f2937, 1).strokeCircle(0, 0, 5);
-  this.crowdInfoLegend.setText(`Trend: ${statusLabel}`);
+    this.crowdInfoLegend.setText(`Trend: ${statusLabel}`);
 
     this.repositionCrowdInfo();
   }
 
   // Clean up all created HUD elements safely
   public destroy() {
-    const destroyObj = (o?: Phaser.GameObjects.GameObject) => { try { o && o.destroy(); } catch { /* no-op */ } };
+    const destroyObj = (o?: Phaser.GameObjects.GameObject) => {
+      try {
+        o && o.destroy();
+      } catch { /* no-op */ }
+    };
     destroyObj(this.topBar); this.topBar = undefined as any;
     destroyObj(this.topBarTitle); this.topBarTitle = undefined as any;
     destroyObj(this.topBarLegend); this.topBarLegend = undefined as any;

@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { gameConfig } from "@/data/gameConfig";
+import { computeScore } from "../../score";
 
 export interface GameOverData {
   tick: number;
@@ -13,7 +14,11 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
   const width = cam.width;
   const height = cam.height;
   const seconds = data.tick * (gameConfig.tickDurationMs / 1000);
-  const score = Math.floor((seconds / 10) * 1 + data.planetHealth / 100 + data.populationHealth);
+  const score = computeScore({
+    tick: data.tick,
+    tickDurationMs: gameConfig.tickDurationMs,
+    populationHealth: data.populationHealth
+  });
 
   // Depth constants (higher than HUD / heal button ~ < 20 earlier)
   const DEPTH_BACKDROP = 400;
@@ -79,12 +84,12 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
   // Humorous encouragement directly under the score label
   const humor = scene.add.text(0, scoreLabel.y + scoreLabel.height + 6,
     "You did your best. The planet filed a polite “do better” request for next run. 🌱", {
-    fontFamily: "monospace",
-    fontSize: "16px",
-    color: "#facc15",
-    align: "center",
-    wordWrap: { width: panelW - 120 }
-  }).setOrigin(0.5, -0.2);
+      fontFamily: "monospace",
+      fontSize: "16px",
+      color: "#facc15",
+      align: "center",
+      wordWrap: { width: panelW - 120 }
+    }).setOrigin(0.5, -0.2);
 
   // Stats (LEFT aligned now)
   const goodCount = data.installed.filter(s => s.type === "good").length;
@@ -116,31 +121,37 @@ export function showGameOverScreen(scene: Phaser.Scene, data: GameOverData, onRe
     wordWrap: { width: panelW - 72 }
   }).setOrigin(0, 0);
 
-  // Restart button: yellow gradient rounded pill
+  // Restart button: match StartMenu style (emerald rounded button with subtle glow)
   const btnW = 200;
   const btnY = panelH / 2 - 50;
   const btnH = 50;
-  const grad = scene.add.graphics({ x: -btnW / 2, y: btnY - btnH / 2 }).setDepth(DEPTH_CONTENT).setInteractive(new Phaser.Geom.Rectangle(0, 0, btnW, btnH), Phaser.Geom.Rectangle.Contains);
+  const grad = scene
+    .add.graphics({ x: -btnW / 2, y: btnY - btnH / 2 })
+    .setDepth(DEPTH_CONTENT)
+    .setInteractive(new Phaser.Geom.Rectangle(0, 0, btnW, btnH), Phaser.Geom.Rectangle.Contains);
   const drawButton = (hover = false) => {
     grad.clear();
-    const top = hover ? 0xfde047 : 0xfcd34d;
-    const bottom = hover ? 0xfbbf24 : 0xf59e0b;
-    const radius = 24;
+    const top = hover ? 0x34d399 : 0x10b981; // emerald-400 / emerald-500
+    const bottom = hover ? 0x10b981 : 0x059669; // emerald-500 / emerald-600
+    const border = hover ? 0x34d399 : 0x059669;
+    const radius = 14;
+    // soft glow underlay
+    grad.fillStyle(0x10b981, 0.25).fillRoundedRect(-2, 2, btnW + 4, btnH + 4, radius + 4);
     // gradient simulation with two stacked rounded rects (outer then inner)
     grad.fillStyle(bottom, 1).fillRoundedRect(0, 0, btnW, btnH, radius);
     grad.fillStyle(top, 1).fillRoundedRect(0, 0, btnW, btnH - 4, radius);
-    grad.lineStyle(2, hover ? 0xfacc15 : 0xd97706, 1).strokeRoundedRect(0, 0, btnW, btnH, radius);
-    grad.setAlpha(0.96);
+    grad.lineStyle(2, border, 0.7).strokeRoundedRect(0, 0, btnW, btnH, radius);
+    grad.setAlpha(0.98);
   };
   drawButton();
-  const btnLabel = scene.add.text(0, btnY, "RESTART", {
-    fontFamily: "monospace",
-    fontSize: "24px",
-    color: "#1f1300",
-    fontStyle: "bold",
-    stroke: "#ffffff",
-    strokeThickness: 2
-  }).setOrigin(0.5);
+  const btnLabel = scene
+    .add.text(0, btnY, "RESTART", {
+      fontFamily: "monospace",
+      fontSize: "22px",
+      color: "#062c26", // dark text like StartMenu button
+      fontStyle: "bold"
+    })
+    .setOrigin(0.5);
   grad.on("pointerover", () => {
     drawButton(true); btnLabel.setScale(1.04);
   });

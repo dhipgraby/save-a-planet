@@ -20,7 +20,7 @@ export default function PhaserCanvas() {
   }, []);
 
   return (
-    <div className="w-full h-[85vh] flex items-center justify-center rounded-[30px] border border-gray-700 bg-gray-900/50 overflow-hidden">
+    <div className="w-full h-[85vh] flex items-center justify-center rounded-[20px] border border-gray-700 bg-gray-900/50 overflow-hidden">
       <div ref={containerRef} className="w-full h-full max-h-[90vh]" />
     </div>
   );

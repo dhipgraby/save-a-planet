@@ -11,6 +11,7 @@ export class StatsSidebar {
   }
 
   public ensure(populationHealth: number) {
+    console.log("Population health:", populationHealth);
     if (this.root) return;
     const cam = this.scene.cameras.main;
     const width = Math.min(400, Math.max(260, Math.floor(cam.width * 0.26)));

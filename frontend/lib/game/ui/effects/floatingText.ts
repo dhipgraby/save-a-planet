@@ -14,7 +14,7 @@ export interface FloatingTextOptions {
 export function spawnFloatingText(scene: Phaser.Scene, text: string, opts: FloatingTextOptions = {}) {
   const cam = scene.cameras.main;
   const x = opts.x ?? cam.width / 2;
-  const y = opts.y ?? 40;
+  const y = opts.y ?? 10;
   const depth = opts.depth ?? 2000;
   const fontSize = opts.fontSize ?? "18px";
   const rise = opts.rise ?? 50;
