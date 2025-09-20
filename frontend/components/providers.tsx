@@ -30,7 +30,9 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
       <SessionProvider>
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
+          enableSystem={false}
+          forcedTheme="dark"
           disableTransitionOnChange
         >
           {mounted && children}
